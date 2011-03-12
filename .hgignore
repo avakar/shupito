@@ -1,0 +1,4 @@
+syntax: glob
+firmware/default
+eagle.epf
+**.aws
