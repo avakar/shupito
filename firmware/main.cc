@@ -47,6 +47,7 @@ public:
 		PdiData::clear();
 
 		UCSR0B = 0;
+		UCSR0C = (1<<URSEL0);
 
 		m_state = st_disabled;
 	}
@@ -75,13 +76,14 @@ public:
 		return !m_rx_buffer.empty();
 	}
 
-	void write(uint8_t data, uint8_t rx_count)
+	void write(uint8_t data, uint8_t rx_count = 0)
 	{
 		AVRLIB_ASSERT(this->tx_ready());
 
 		UCSR0B = (1<<TXEN0);
 		m_tx_buffer.push(data);
 		m_rx_count = rx_count;
+		UCSR0A = (1<<TXC0);
 		UCSR0B = (1<<TXEN0)|(1<<UDRIE0);
 	}
 
@@ -104,20 +106,23 @@ public:
 		case st_disabled:
 			break;
 		case st_rst_disable:
-			if (m_clock.value() - m_time_base < 32) // FIXME: time constants
-			{
-				m_state = st_wait_ticks;
-				m_time_base += 32;
-			}
-			break;
-		case st_wait_ticks:
-			if (m_clock.value() - m_time_base < 128) // FIXME: time constants
+			if (m_clock.value() - m_time_base >= 8) // FIXME: time constants
 			{
 				UBRR0H = 0;
 				UBRR0L = 10;
 				UCSR0C = (1<<URSEL0) | (1<<UMSEL0)
 					| (1<<UPM01) | (1<<USBS0) | (1<<UCSZ01) | (1<<UCSZ00) | (1<<UCPOL0);
 				UCSR0B = (1<<TXEN0);
+
+				m_state = st_wait_ticks;
+				m_time_base += 8;
+			}
+			break;
+		case st_wait_ticks:
+			if (m_clock.value() - m_time_base >= 64) // FIXME: time constants
+			{
+				PdiData::output(false);
+				PdiData::clear();
 
 				m_state = st_tx;
 				m_rx_count = 0;
@@ -137,14 +142,17 @@ public:
 
 	void intr_udre()
 	{
-		UDR0 = m_tx_buffer.top();
-		m_tx_buffer.pop();
-		if (m_tx_buffer.empty())
+		if (!m_tx_buffer.empty())
 		{
-			if (m_rx_count)
-				UCSR0B = (1<<TXEN0)|(1<<TXCIE0);
-			else
-				UCSR0B = (1<<TXEN0);
+			UDR0 = m_tx_buffer.top();
+			m_tx_buffer.pop();
+			if (m_tx_buffer.empty())
+			{
+				if (m_rx_count)
+					UCSR0B = (1<<TXEN0)|(1<<TXCIE0);
+				else
+					UCSR0B = (1<<TXEN0);
+			}
 		}
 	}
 	
@@ -156,8 +164,8 @@ public:
 private:
 	Clock & m_clock;
 	typename Clock::time_type m_time_base;
-	avrlib::buffer<uint8_t, 8> m_rx_buffer;
-	avrlib::buffer<uint8_t, 8> m_tx_buffer;
+	avrlib::buffer<uint8_t, 16> m_rx_buffer;
+	avrlib::buffer<uint8_t, 16> m_tx_buffer;
 	volatile uint8_t m_rx_count;
 
 	enum { st_disabled, st_rst_disable, st_wait_ticks, st_tx } m_state;
@@ -184,8 +192,7 @@ int main()
 {
 	sei();
 
-	avrlib::timer1::tov_interrupt(true);
-	avrlib::timer1::clock_source(avrlib::timer_fosc_8);
+	clock.enable(avrlib::timer_fosc_8);
 
 	for (;;)
 	{
@@ -203,15 +210,47 @@ int main()
 			case 'r':
 				pdi.write(0x80, 1);
 				break;
+			case 'g':
+				pdi.write(0xc2);
+				pdi.write(0x01);
+				break;
 			case 'T':
 				avrlib::send_hex(com, clock.value());
 				com.write('\n');
+				break;
+			case 'k':
+				pdi.write(0xe0);
+
+				// 0x1289AB45CDD888FF
+				pdi.write(0xff);
+				pdi.write(0x88);
+				pdi.write(0xd8);
+				pdi.write(0xcd);
+				pdi.write(0x45);
+				pdi.write(0xab);
+				pdi.write(0x89);
+				pdi.write(0x12);
+				break;
+			case '?':
+				avrlib::send_hex(com, UCSR0A);
+				com.write(' ');
+				avrlib::send_hex(com, UCSR0B);
+				com.write(' ');
+				avrlib::send_hex(com, UCSR0C);
+				com.write('\n');
+				break;
+			default:
+				if ('0' <= ch && ch <= '9')
+					pdi.write(0x80 | (ch - '0'), 1);
 				break;
 			}
 		}
 
 		if (pdi.rx_ready())
+		{
 			send_hex(com, pdi.read());
+			com.write('\n');
+		}
 
 		pdi.process();
 		com.process_tx();
