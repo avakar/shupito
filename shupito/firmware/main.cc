@@ -204,23 +204,6 @@ void process()
 	com.process_tx();
 }
 
-template <typename Pdi>
-bool pdi_ptrcopy(Pdi & pdi, uint8_t len)
-{
-	bool success = true;
-	for (uint8_t i = 0; i != len; ++i)
-	{
-		pdi_ld(pdi);
-
-		uint8_t v = 0;
-		if (success)
-			success = pdi_read(pdi, v, clock, process);
-		com.write(v);
-	}
-
-	return success;
-}
-
 int main()
 {
 	sei();
@@ -320,7 +303,6 @@ int main()
 						addr += 0x800000;
 
 						pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x43);
-						pdi_st_ptr(pdi, addr);
 
 						uint8_t len = cp[5];
 
@@ -328,18 +310,20 @@ int main()
 						com.write(0xf4);
 						com.write(len);
 
-						success = pdi_ptrcopy(pdi, len);
-
+						success = pdi_ptrcopy(pdi, com, addr, len, clock, process);
 						com.write(0);
 					}
 					else if (memid == 3)
 					{
+						uint8_t len = cp[5];
+						if (len > 8)
+							len = 8;
+
 						pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x07/*read fuse*/);
-						pdi_st_ptr(pdi, 0x008F0020);
 
 						com.write(0x80);
-						com.write(0x48);
-						success = pdi_ptrcopy(pdi, 8);
+						com.write(0x40 | len);
+						success = pdi_ptrcopy(pdi, com, 0x008F0020 | (cp[1] & 0x07), len, clock, process);
 					}
 					else
 					{

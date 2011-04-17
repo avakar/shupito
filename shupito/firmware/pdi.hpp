@@ -89,7 +89,6 @@ void pdi_st(Pdi & pdi, T t)
 	}	
 }
 
-/*
 template <typename Pdi, typename T>
 void pdi_repeat(Pdi & pdi, T count)
 {
@@ -101,6 +100,7 @@ void pdi_repeat(Pdi & pdi, T count)
 	}	
 }
 
+/*
 template <typename Pdi, typename T, typename U>
 void pdi_ld_range(Pdi & pdi, T addr, U count)
 {
@@ -165,6 +165,37 @@ bool pdi_wait_nvm_busy(Pdi & pdi, Clock & clock, typename Clock::time_type timeo
 	}
 
 	return success && (status & 0x80) == 0;
+}
+
+
+template <typename Pdi, typename Com, typename Clock, typename Process>
+bool pdi_ptrcopy(Pdi & pdi, Com & com, uint32_t addr, uint8_t len, Clock & clock, Process const & process)
+{
+	bool success = true;
+	while (len > 0)
+	{
+		uint8_t chunk = len > 14? 14: len;
+
+		if (success)
+		{
+			pdi_st_ptr(pdi, addr);
+			pdi_repeat(pdi, (uint8_t)(chunk - 1));
+			pdi.write(0x24, chunk);
+		}
+
+		for (uint8_t i = 0; i != chunk; ++i)
+		{
+			uint8_t v = 0;
+			if (success)
+				success = pdi_read(pdi, v, clock, process);
+			com.write(v);
+		}
+
+		addr += chunk;
+		len -= chunk;
+	}
+
+	return success;
 }
 
 #endif
