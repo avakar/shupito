@@ -175,6 +175,60 @@ chipdef const * find_chipdef(uint32_t signature, std::vector<chipdef> const & ch
 	return 0;
 }
 
+struct hex_output
+{
+	explicit hex_output(int out_address)
+		: out_address(out_address)
+	{
+	}
+
+	template <typename Iter>
+	void operator()(Iter first, Iter last)
+	{
+		buf.insert(buf.end(), first, last);
+				
+		while (buf.size() > 16)
+		{
+			print_hex_line(out_address, &buf[0], 16);
+			out_address += 16;
+			buf.erase(buf.begin(), buf.begin() + 16);
+		}
+	}
+
+	void close()
+	{
+		print_hex_line(out_address, &buf[0], buf.size());
+		buf.clear();
+		std::cout << ":00000001FF" << std::endl;
+	}
+
+	int out_address;
+	std::vector<uint8_t> buf;
+};
+
+template <typename Container>
+struct appender_functor
+{
+	appender_functor(Container & c)
+		: m_c(c)
+	{
+	}
+
+	template <typename Iter>
+	void operator()(Iter first, Iter last)
+	{
+		m_c.insert(m_c.end(), first, last);
+	}
+
+	Container & m_c;
+};
+
+template <typename Container>
+appender_functor<Container> appender(Container & c)
+{
+	return appender_functor<Container>(c);
+}
+
 struct app
 {
 	app()
@@ -208,7 +262,7 @@ struct app
 				continue;
 			}
 	
-			if (cmd == 255)
+			if (cmd == 255 || cmd == 0xe)
 				continue;
 	
 			if (cmd != command)
@@ -336,7 +390,102 @@ struct app
 			std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)sig[7] << std::endl;
 		}
 	}
-		
+
+	template <typename Appendable>
+	void read_memory(int memid, int start, int length, Appendable & buf)
+	{
+		int processed = 0;
+		while (processed < length)
+		{
+			uint32_t chunk = length - processed;
+			if (chunk > 127)
+				chunk = 127;
+
+			uint32_t base = start + processed;
+			send_packet(0x46, memid, base, base >> 8, base >> 16, base >> 24, chunk);
+			receive_packet(4);
+			buf(cmd_parser.data(), cmd_parser.data() + cmd_parser.size());
+
+			processed += chunk;
+		}
+	}
+
+	template <typename Iter>
+	void write_mempage(int memid, int start, Iter first, Iter last)
+	{
+		this->send_packet(0x65, memid, start, start >> 8, start >> 16, start >> 24);
+		this->receive_packet(6);
+
+		uint8_t packet[18];
+		packet[0] = 0x80;
+		packet[1] = 0x70 | (last - first + 1);
+		packet[2] = memid;
+
+		int i = 3;
+		for (Iter p = first; p != last; ++p)
+			packet[i++] = *p;
+
+		lc.write(packet, packet + i);
+		this->receive_packet(7);
+
+		this->send_packet(0x85, memid, start, start >> 8, start >> 16, start >> 24);
+		this->receive_packet(8);
+	}
+
+	template <typename Iter>
+	void write_memory(chipdef::memorydef const & md, int start, Iter first, Iter last)
+	{
+		if (md.pagesize == 0)
+		{
+			this->write_mempage(md.memid, start, first, last);
+		}
+		else
+		{
+			while (first != last)
+			{
+				this->write_mempage(md.memid, start, first, first + md.pagesize);
+				first += md.pagesize;
+				start += md.pagesize;
+			}
+		}
+	}
+
+	chipdef::memorydef const & get_memdef(chipdef const & cd, std::string const & memname)
+	{
+		std::map<std::string, chipdef::memorydef>::const_iterator it = cd.memories.find(memname);
+		if (it == cd.memories.end())
+			throw std::runtime_error("The required memory section could not be found: " + memname);
+
+		return it->second;
+	}
+
+	std::vector<uint8_t> read_memory(chipdef const & cd, std::string const & memname)
+	{
+		chipdef::memorydef const & md = this->get_memdef(cd, memname);
+		std::vector<uint8_t> fuses;
+		this->read_memory(md.memid, 0, md.size, appender(fuses));
+		return fuses;
+	}
+
+	void print_chipid(std::ostream & o, chipdef const & cd)
+	{
+		o << "id=";
+		if (cd.name.empty())
+			o << "<unknown>";
+		else
+			o << cd.name;
+
+		o << " (" << cd.signature << ")\n";
+	}
+
+	template <typename Iter>
+	void print_fuses(std::ostream & o, chipdef const & cd, Iter first, Iter last)
+	{
+		for (Iter p = first; p != last; ++p)
+			o << std::hex << std::setw(2) << std::setfill('0') << (int)*p;
+		o << " (" << cd.format_value(first, last) << ")" << std::endl;
+	}
+
 	int run_command(std::string const & cmd, int argc, char * argv[])
 	{
 		if (cmd.empty())
@@ -345,9 +494,14 @@ struct app
 		else if (cmd == ":chipid")
 		{
 			ensure_programming_mode();
-			get_chip_def();
-			print_chip_id(m_cd, &signature[0]);
+			read_chip_def(m_cd2);
+			print_chipid(std::cout, m_cd2);
+
+			std::vector<uint8_t> fuses = read_memory(m_cd2, "fuses");
+			std::cout << "fuses=";
+			print_fuses(std::cout, m_cd2, fuses.begin(), fuses.end());
 		}
+#if 0
 		else if (cmd == ":clock")
 		{
 			if (argc < 1)
@@ -360,6 +514,7 @@ struct app
 			send_packet(0xa2, uint8_t(clock), uint8_t(clock >> 8));
 			receive_packet(0x0a);
 		}
+#endif
 		else if (cmd == ":read")
 		{
 			ensure_programming_mode();
@@ -379,80 +534,42 @@ struct app
 				length = boost::lexical_cast<uint32_t>(argv[2]);
 			}
 			
-			std::string memory_type = argv[0];
+			read_chip_def(m_cd2);
 
-			std::size_t memsize = 0;
-			
-			get_chip_def();
-			if (m_cd != 0)
+			std::string memory_type = argv[0];
+			std::map<std::string, chipdef::memorydef>::const_iterator ci = m_cd2.memories.find(memory_type);
+			if (ci == m_cd2.memories.end())
 			{
-				std::map<std::string, chipdef::memorydef>::const_iterator ci = m_cd->memories.find(memory_type);
-				if (ci == m_cd->memories.end())
-				{
-					std::cerr << "error: the chip does not have this type of memory" << std::endl;
-					return 4;
-				}
-				memsize = ci->second.size;
+				std::cerr << "error: the chip does not have this type of memory" << std::endl;
+				return 4;
 			}
+
+			chipdef::memorydef const & md = ci->second;
 			
-			if (memsize != 0 && length + start > memsize)
+			if (md.size != 0 && length + start > md.size)
 			{
 				std::cerr << "abort: the device doesn't have that much memory" << std::endl;
 				return 5;
 			}
 			
-			if (length == 0 && memsize != 0)
-				length = memsize;
+			if (length == 0 && md.size != 0)
+				length = md.size;
 			
 			if (length == 0)
 			{
 				std::cerr << "abort: specify the length of the memory block you want to read" << std::endl;
 				return 6;
 			}
-			
-			std::vector<uint8_t> buf;
-			uint32_t out_address = start;
-			
-			int memid = 0;
-			if (memory_type == "flash")
-				memid = 1;
-			else if (memory_type == "eeprom")
-				memid = 2;
-			else
-			{
-				std::cerr << "error: unknown memory type: " << memory_type << std::endl;
-				return 2;
-			}
 
-			uint32_t processed = 0;
-			while (processed < length)
-			{
-				uint32_t chunk = length - processed;
-				if (chunk > 127)
-					chunk = 127;
-
-				uint32_t base = start + processed;
-				send_packet(0x46, memid, base, base >> 8, base >> 16, base >> 24, chunk);
-				receive_packet(4);
-				buf.insert(buf.end(), cmd_parser.data(), cmd_parser.data() + cmd_parser.size());
-				
-				while (buf.size() > 16)
-				{
-					print_hex_line(out_address, &buf[0], 16);
-					out_address += 16;
-					buf.erase(buf.begin(), buf.begin() + 16);
-				}
-				
-				processed += chunk;
-			}
-			print_hex_line(out_address, &buf[0], buf.size());
-			std::cout << ":00000001FF" << std::endl;
+			hex_output out(start);
+			this->read_memory(md.memid, start, length, out);
+			out.close();
 		}
 		else if (cmd == ":erase")
 		{
 			ensure_programming_mode();
-			send_packet(0x60);
-			receive_packet(6);
+			send_packet(0x50);
+			receive_packet(5);
 		}
 		else if (cmd == ":write")
 		{
@@ -587,8 +704,8 @@ struct app
 				if (empty)
 					continue;
 
-				send_packet(0x55, 1, i, i >> 8, i >> 16, i >> 24);
-				receive_packet(5);
+				send_packet(0x65, 1, i, i >> 8, i >> 16, i >> 24);
+				receive_packet(6);
 
 				std::size_t address = 0;
 				while (address < pagebuffer.size())
@@ -620,11 +737,11 @@ struct app
 		else if (cmd == ":writefuses")
 		{
 			ensure_programming_mode();
-			uint8_t fuse_bytes[4] = {};
-			
-			get_chip_def();
-			std::copy(signature.begin() + 3, signature.begin() + 7, fuse_bytes);
-			
+			this->read_chip_def(m_cd2);
+
+			std::vector<uint8_t> old_fuse_bytes = this->read_memory(m_cd2, "fuses");
+			std::vector<uint8_t> fuse_bytes = old_fuse_bytes;
+
 			bool force = false;
 			for (int i = 0; i < argc; ++i)
 			{
@@ -651,24 +768,18 @@ struct app
 						value = boost::lexical_cast<int>(arg.substr(pos + 1));
 					}
 					
-					if (!m_cd)
-					{
-						std::cerr << "abort: the chip signature is unknown, specify fuses as a sequence of hexadecimal digits" << std::endl;
-						return 8;
-					}
-					
 					bool found = false;
-					for (std::size_t j = 0; !found && j < m_cd->fuses.size(); ++j)
+					for (std::size_t j = 0; !found && j < m_cd2.fuses.size(); ++j)
 					{
-						if (m_cd->fuses[j].name == name)
+						if (m_cd2.fuses[j].name == name)
 						{
-							for (std::size_t k = 0; k < m_cd->fuses[j].bits.size(); ++k)
+							for (std::size_t k = 0; k < m_cd2.fuses[j].bits.size(); ++k)
 							{
-								int bitno = m_cd->fuses[j].bits[k];
+								int bitno = m_cd2.fuses[j].bits[k];
 								int byteno = bitno / 8;
 								bitno %= 8;
 								
-								if (byteno > 3)
+								if (byteno >= fuse_bytes.size())
 									continue;
 								
 								if (value & 1)
@@ -688,61 +799,30 @@ struct app
 						return 9;
 					}
 				}
-				else if (arg.size() < 8)
-				{
-					bool next_high = true;
-					int index = 0;
-					for (std::size_t j = 0; j < arg.size(); ++j)
-					{
-						int value;
-						if ('0' <= arg[j] && arg[j] <= '9')
-							value = arg[j] - '0';
-						else if ('a' <= arg[j] && arg[j] <= 'f')
-							value = arg[j] - 'a' + 10;
-						else if ('A' <= arg[j] && arg[j] <= 'F')
-							value = arg[j] - 'A' + 10;
-						else
-						{
-							std::cerr << "abort: invalid argument: " << arg << std::endl;
-							return 7;
-						}
-
-						if (j % 2 == 0)
-							fuse_bytes[j/2] = (fuse_bytes[j/2] & 0xf0) | (value << 4);
-						else
-							fuse_bytes[j/2] = (fuse_bytes[j/2] & 0x0f) | (value);
-					}
-				}
 				else
 				{
 					std::cerr << "abort: invalid argument: " << arg << std::endl;
 					return 7;
 				}
 			}
-			
+
 			std::cout << "current=";
-			print_chip_fuses(m_cd, &signature[3]);
+			this->print_fuses(std::cout, m_cd2, old_fuse_bytes.begin(), old_fuse_bytes.end());
 			std::cout << "new    =";
-			print_chip_fuses(m_cd, fuse_bytes);
+			this->print_fuses(std::cout, m_cd2, fuse_bytes.begin(), fuse_bytes.end());
 			
-			if (!force && m_cd == 0)
-			{
-				std::cerr << "abort: cannot verify the safety of fuse values.\nVerify the fuse values manually and rerun the command with --force." << std::endl;
-				return 10;
-			}
-			
-			if (!force && !m_cd->is_value_safe(fuse_bytes, fuse_bytes + 4))
+			if (!force && !m_cd2.is_value_safe(fuse_bytes.begin(), fuse_bytes.end()))
 			{
 				std::cerr << "abort: the new fuse values are unsafe. Rerun the command with --force." << std::endl;
 				return 10;
 			}
-			
-			send_packet(0x94, fuse_bytes[0], fuse_bytes[1], fuse_bytes[2], fuse_bytes[3]);
-			receive_packet(9);
-			m_cd = 0;
-			get_chip_def();
+
+			chipdef::memorydef const & md = this->get_memdef(m_cd2, "fuses");
+			this->write_memory(md, 0, fuse_bytes.begin(), fuse_bytes.end());
+
+			fuse_bytes = this->read_memory(m_cd2, "fuses");
 			std::cout << "verify =";
-			print_chip_fuses(m_cd, &signature[3]);
+			this->print_fuses(std::cout, m_cd2, fuse_bytes.begin(), fuse_bytes.end());
 		}
 		else if (cmd == ":run")
 		{
@@ -768,8 +848,27 @@ struct app
 		if (cmd_parser.size() < 3)
 			throw std::runtime_error("failed to read chip signature");
 			
-		signature.assign(cmd_parser.data(), cmd_parser.data() + 8);
+		signature.assign(cmd_parser.data(), cmd_parser.data() + cmd_parser.size());
 		m_cd = find_chipdef((cmd_parser[0] << 16) | (cmd_parser[1] << 8) | (cmd_parser[2]), chipdefs);
+	}
+
+	void read_chip_def(chipdef & cd)
+	{
+		if (!cd.signature.empty())
+			return;
+
+		send_packet(0x30);
+		receive_packet(3);
+		if (cmd_parser.size() < 3)
+			throw std::runtime_error("failed to read chip signature");
+		cd.signature = "avr:";
+		for (size_t i = 0; i < cmd_parser.size(); ++i)
+		{
+			static char const hexdigits[] = "0123456789abcdef";
+			cd.signature.push_back(hexdigits[(cmd_parser[i] >> 4) & 0xf]);
+			cd.signature.push_back(hexdigits[cmd_parser[i] & 0xf]);
+		}
+		update_chipdef(chipdefs, cd);
 	}
 	
 private:
@@ -781,6 +880,8 @@ private:
 	command_parser cmd_parser;
 	chipdef const * m_cd;
 	bool m_no_more_commands;
+
+	chipdef m_cd2;
 
 	bool m_programming_mode;
 };

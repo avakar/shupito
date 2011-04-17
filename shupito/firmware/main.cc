@@ -204,6 +204,23 @@ void process()
 	com.process_tx();
 }
 
+template <typename Pdi>
+bool pdi_ptrcopy(Pdi & pdi, uint8_t len)
+{
+	bool success = true;
+	for (uint8_t i = 0; i != len; ++i)
+	{
+		pdi_ld(pdi);
+
+		uint8_t v = 0;
+		if (success)
+			success = pdi_read(pdi, v, clock, process);
+		com.write(v);
+	}
+
+	return success;
+}
+
 int main()
 {
 	sei();
@@ -213,6 +230,7 @@ int main()
 	avrlib::command_parser cp;
 	cp.clear();
 
+	uint8_t fuse_address = 0;
 	for (;;)
 	{
 		if (!com.empty())
@@ -220,59 +238,6 @@ int main()
 			uint8_t ch = cp.push_data(com.read());
 			switch (ch)
 			{
-			case 'a':
-				pdi.init();
-				break;
-			case 'A':
-				pdi.clear();
-				break;
-			case 'r':
-				pdi_ldcs(pdi, 0);
-				break;
-			case 'g':
-				pdi_stcs(pdi, 2, 1);
-				break;
-			case 'm':
-				pdi_ldcs(pdi, 1);
-				break;
-			case 'M':
-				pdi_stcs(pdi, 1, 0x59);
-				break;
-			case 'T':
-				avrlib::send_hex(com, clock.value());
-				com.write('\n');
-				break;
-			case 'k':
-				pdi_key(pdi, 0x1289AB45CDD888FFull);
-				/*pdi.write(0xe0);
-
-				// 0x1289AB45CDD888FF
-				pdi.write(0xff);
-				pdi.write(0x88);
-				pdi.write(0xd8);
-				pdi.write(0xcd);
-				pdi.write(0x45);
-				pdi.write(0xab);
-				pdi.write(0x89);
-				pdi.write(0x12);*/
-				break;
-			case 'R': // Get the current NVM controller command
-				pdi_lds(pdi, (uint32_t)0x010001CA, 1);
-				break;
-			case 'W': // Set "read NVM" command
-				pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x43);
-				break;
-			case 'P': // Read the signature row
-				pdi_lds(pdi, (uint32_t)0x01000090, 4);
-				break;
-			case '?':
-				avrlib::send_hex(com, UCSR0A);
-				com.write(' ');
-				avrlib::send_hex(com, UCSR0B);
-				com.write(' ');
-				avrlib::send_hex(com, UCSR0C);
-				com.write('\n');
-				break;
 			case 0:
 				// Send out the identification
 				com.write(0x80);
@@ -283,7 +248,6 @@ int main()
 				com.write(0xe9);
 				break;
 			case 1:
-			case '1':
 				{
 					// Enable programming mode
 					pdi.init();
@@ -317,16 +281,16 @@ int main()
 				break;
 			case 3:
 				{
-					// Read signature, lock bits, fuses and the calibration byte 
+					// Read signature
 					pdi_sts(pdi, (uint8_t)0x010001CA, (uint8_t)0x43);
-					pdi_lds(pdi, (uint32_t)0x01000090, 3);
+					pdi_lds(pdi, (uint32_t)0x01000090, 4);
 
 					com.write(0x80);
-					com.write(0x33);
+					com.write(0x34);
 
 					bool success = true;
 					
-					for (uint8_t i = 0; i != 3; ++i)
+					for (uint8_t i = 0; i != 4; ++i)
 					{
 						uint8_t v = 0;
 						if (success)
@@ -346,33 +310,41 @@ int main()
 			case 4: // Read memory
 				if (cp.size() == 6)
 				{
-					uint8_t memid = cp[0];
-
-					uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
-					addr %= 0x0C0000;
-					addr += 0x800000;
-
-					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x43);
-					pdi_st_ptr(pdi, addr);
-
-					uint8_t len = cp[5];
-
-					com.write(0x80);
-					com.write(0xf4);
-					com.write(len);
-
 					bool success = true;
-					for (uint8_t i = 0; i != len; ++i)
+
+					uint8_t memid = cp[0];
+					if (memid == 1)
 					{
-						pdi_ld(pdi);
+						uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
+						addr %= 0x0C0000;
+						addr += 0x800000;
 
-						uint8_t v = 0;
-						if (success)
-							success = pdi_read(pdi, v, clock, process);
-						com.write(v);
+						pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x43);
+						pdi_st_ptr(pdi, addr);
+
+						uint8_t len = cp[5];
+
+						com.write(0x80);
+						com.write(0xf4);
+						com.write(len);
+
+						success = pdi_ptrcopy(pdi, len);
+
+						com.write(0);
 					}
+					else if (memid == 3)
+					{
+						pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x07/*read fuse*/);
+						pdi_st_ptr(pdi, 0x008F0020);
 
-					com.write(0);
+						com.write(0x80);
+						com.write(0x48);
+						success = pdi_ptrcopy(pdi, 8);
+					}
+					else
+					{
+						success = false;
+					}
 
 					if (!success)
 					{
@@ -384,29 +356,6 @@ int main()
 				}
 				break;
 			case 5:
-				// Prepare memory page for a load and write.
-				// WPREP 1'memid 4'addr
-				if (cp.size() >= 5)
-				{
-					uint8_t memid = cp[0];
-					uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
-					addr %= 0x0C0000;
-					addr += 0x800000;
-
-					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x26);
-					pdi_sts(pdi, (uint32_t)0x010001CB, (uint8_t)0x01);
-
-					bool success = pdi_wait_nvm_busy(pdi, clock, 10000, process);
-
-					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x23);
-					pdi_st_ptr(pdi, addr);
-
-					com.write(0x80);
-					com.write(0x51);
-					com.write(!success);
-				}
-				break;
-			case 6:
 				// ERASE 1'memid
 				{
 					// CMD = Chip erase
@@ -415,47 +364,115 @@ int main()
 
 					bool success = pdi_wait_nvm_busy(pdi, clock, 10000, process);
 					com.write(0x80);
+					com.write(0x51);
+					com.write(!success);
+				}
+				break;
+			case 6:
+				// Prepare memory page for a load and write.
+				// WPREP 1'memid 4'addr
+				if (cp.size() >= 5)
+				{
+					uint8_t memid = cp[0];
+
+					bool success = true;
+					if (memid == 1)
+					{
+						uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
+						addr %= 0x0C0000;
+						addr += 0x800000;
+
+						pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x26);
+						pdi_sts(pdi, (uint32_t)0x010001CB, (uint8_t)0x01);
+
+						success = pdi_wait_nvm_busy(pdi, clock, 10000, process);
+
+						pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x23);
+						pdi_st_ptr(pdi, addr);
+					}
+					else if (memid == 3)
+					{
+						pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x4C/*write fuse*/);
+						fuse_address = cp[1];
+					}
+					else
+					{
+						success = false;
+					}
+
+					com.write(0x80);
 					com.write(0x61);
 					com.write(!success);
 				}
 				break;
 			case 7:
 				// Prepare memory page for a load and write.
-				// WFILL 1'memid 1'seq (1'data)*
-				if (cp.size() >= 2)
+				// WFILL 1'memid (1'data)*
+				if (cp.size() >= 1)
 				{
-					for (uint8_t i = 2; i < cp.size(); ++i)
+					bool success = true;
+
+					uint8_t memid = cp[0];
+					if (memid == 1)
 					{
-						while (!pdi.tx_empty())
-							process();
-						pdi_st(pdi, cp[i]);
+						for (uint8_t i = 1; i < cp.size(); ++i)
+						{
+							while (!pdi.tx_empty())
+								process();
+							pdi_st(pdi, cp[i]);
+						}
 					}
+					else if (memid == 3)
+					{
+						for (uint8_t i = 1; success && i < cp.size(); ++i)
+						{
+							while (!pdi.tx_empty())
+								process();
+							pdi_sts(pdi, uint32_t(0x08F0020 | (fuse_address & 0x07)), cp[i]);
+							success = pdi_wait_nvm_busy(pdi, clock, 100000, process);
+							++fuse_address;
+						}
+					}
+
 					com.write(0x80);
-					com.write(0x70);
+					com.write(0x71);
+					com.write(!success);
 				}
 				break;
 			case 8:
 				// WRITE 1'memid 4'addr
 				if (cp.size() == 5)
 				{
+					bool success = true;
+
+					uint8_t memid = cp[0];
 					uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
-					addr %= 0x0C0000;
-					addr += 0x800000;
+					if (memid == 1)
+					{
+						addr %= 0x0C0000;
+						addr += 0x800000;
 
-					// CMD = Erase & Write Flash Page
-					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x2F);
-					pdi_sts(pdi, addr, (uint8_t)0);
+						// CMD = Erase & Write Flash Page
+						pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x2F);
+						pdi_sts(pdi, addr, (uint8_t)0);
 
-					bool success = pdi_wait_nvm_busy(pdi, clock, 10000, process);
+						success = pdi_wait_nvm_busy(pdi, clock, 10000, process);
+					}
+					else if (memid == 3)
+					{
+						// Cycle reset to reload the new fuse values
+						pdi_stcs(pdi, 1, 0x00);
+						pdi_stcs(pdi, 1, 0x59);
+					}
+					else
+					{
+						success = false;
+					}
 
 					com.write(0x80);
 					com.write(0x81);
 					com.write(!success);
 				}
-				break;
-			default:
-				if ('0' <= ch && ch <= '9')
-					pdi.write(0x80 | (ch - '0'), 1);
 				break;
 			}
 

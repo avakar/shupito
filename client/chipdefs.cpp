@@ -13,9 +13,36 @@ const std::string embedded_chipdefs =
 	"atmega128 avr:1e9702 flash=131072:256,eeprom=4096"
 		" lb:0,1 blb0:2,3 blb1:4,5 cksel:8,9,10,11 sut:12,13 boden:14 bodlevel:15"
 		" bootrst:16 bootsz:17,18 eesave:19 ckopt:20 spien:21 jtagen:22 ocden:23 wdton:24 m103c:25\n"
-	"atxmega64a avr:1e9441 flash=69632:256,eeprom=4096\n"
+	"atxmega64a avr:1e944100 flash=69632:256,eeprom=4096,fuses=8:0 jtaguid:0,1,2,3,4,5,6,7 wdper:8,9,10,11 wdwper:12,13,14,15 bodpd:16,17 bootrst:21 jtagen:32 wdlock:33 startuptime:34,35 rstdisbl:36:1"
+		" bodlevel:40,41,42 eesave:43 bodact:44,45 lb:56,57 blbat:58,59 blba:60,61 blbb:62,63\n"
 	;
-	
+
+void update_chipdef(std::vector<chipdef> const & templates, chipdef & cd)
+{
+	for (std::size_t i = 0; i < templates.size(); ++i)
+	{
+		chipdef const & templ = templates[i];
+		if (cd.signature == templ.signature)
+		{
+			cd.name = templ.name;
+			cd.memories.insert(templ.memories.begin(), templ.memories.end());
+
+			for (std::size_t j = 0; j < templ.fuses.size(); ++j)
+			{
+				std::size_t k;
+				for (k = 0; k < cd.fuses.size(); ++k)
+				{
+					if (cd.fuses[k].name == templ.fuses[j].name)
+						break;
+				}
+
+				if (k == cd.fuses.size())
+					cd.fuses.push_back(templ.fuses[j]);
+			}
+		}
+	}
+}
+
 void parse_chipdefs(std::string const & strdefs, std::vector<chipdef> & res)
 {
 	std::stringstream ss(strdefs);
@@ -46,6 +73,7 @@ void parse_chipdefs(std::string const & strdefs, std::vector<chipdef> & res)
 			std::vector<std::string> mem_size_tokens;
 			boost::algorithm::split(mem_size_tokens, memory_tokens[1], _1 == ':');
 			chipdef::memorydef memdef;
+			memdef.memid = i + 1;
 			memdef.size = boost::lexical_cast<int>(mem_size_tokens[0]);
 			if (mem_size_tokens.size() > 1)
 				memdef.pagesize = boost::lexical_cast<int>(mem_size_tokens[1]);
@@ -82,74 +110,4 @@ void parse_chipdefs(std::string const & strdefs, std::vector<chipdef> & res)
 		
 		res.push_back(def);
 	}
-}
-
-std::string chipdef::format_value(uint8_t const * first, uint8_t const * last) const
-{
-	std::string res;
-	
-	for (std::size_t i = 0; i < fuses.size(); ++i)
-	{
-		if (i > 0)
-			res += ' ';
-
-		int fusevalue = 0;
-		for (std::size_t j = fuses[i].bits.size(); j > 0; --j)
-		{
-			int bitno = fuses[i].bits[j-1];
-			int byteno = bitno / 8;
-			bitno %= 8;
-			
-			if (byteno >= last - first)
-				continue;
-				
-			fusevalue = (fusevalue << 1) | !!(first[byteno] & (1<<bitno));
-		}
-		
-		if (fuses[i].bits.size() == 1)
-			res += (fusevalue == 0? '+': '-');
-
-		res += fuses[i].name;
-
-		if (fuses[i].bits.size() != 1)
-		{
-			res += '=';
-			res += boost::lexical_cast<std::string>(fusevalue);
-		}
-
-		if (fuses[i].values.size() != 0)
-		{
-			if (std::find(fuses[i].values.begin(), fuses[i].values.end(), fusevalue) == fuses[i].values.end())
-			res += '!';
-		}
-	}
-	
-	return res;
-}
-
-bool chipdef::is_value_safe(uint8_t const * first, uint8_t const * last) const
-{
-	for (std::size_t i = 0; i < fuses.size(); ++i)
-	{
-		int fusevalue = 0;
-		for (std::size_t j = fuses[i].bits.size(); j > 0; --j)
-		{
-			int bitno = fuses[i].bits[j-1];
-			int byteno = bitno / 8;
-			bitno %= 8;
-			
-			if (byteno >= last - first)
-				continue;
-				
-			fusevalue = (fusevalue << 1) | !!(first[byteno] & (1<<bitno));
-		}
-		
-		if (fuses[i].values.size() != 0)
-		{
-			if (std::find(fuses[i].values.begin(), fuses[i].values.end(), fusevalue) == fuses[i].values.end())
-				return false;
-		}
-	}
-	
-	return true;
 }

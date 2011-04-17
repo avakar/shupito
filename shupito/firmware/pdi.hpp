@@ -67,6 +67,12 @@ void pdi_st_ptr(Pdi & pdi, T addr)
 }
 
 template <typename Pdi>
+void pdi_ld_ptr(Pdi & pdi, uint8_t len)
+{
+	pdi.write(0x28 | (len - 1), len);
+}
+
+template <typename Pdi>
 void pdi_ld(Pdi & pdi)
 {
 	pdi.write(0x24, 1);
@@ -150,15 +156,15 @@ bool pdi_wait_nvm_busy(Pdi & pdi, Clock & clock, typename Clock::time_type timeo
 {
 	typename Clock::time_type t = clock.value();
 
-	uint8_t status = 0;
+	uint8_t status = 0x80;
 	bool success = true;
-	while (success && (status & 0x01) == 0 && clock.value() - t < timeout)
+	while (success && (status & 0x80) != 0 && clock.value() - t < timeout)
 	{
-		pdi_lds(pdi, (uint32_t)0x010001C4, 1);
+		pdi_lds(pdi, (uint32_t)0x010001CF, 1);
 		success = pdi_read(pdi, status, clock, process);
 	}
 
-	return success;
+	return success && (status & 0x80) == 0;
 }
 
 #endif
