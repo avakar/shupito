@@ -232,7 +232,7 @@ appender_functor<Container> appender(Container & c)
 struct app
 {
 	app()
-		: m_cd(0), m_no_more_commands(false), m_programming_mode(false)
+		: m_no_more_commands(false), m_programming_mode(false)
 	{
 	}
 	
@@ -418,15 +418,19 @@ struct app
 
 		uint8_t packet[18];
 		packet[0] = 0x80;
-		packet[1] = 0x70 | (last - first + 1);
 		packet[2] = memid;
+		while (first != last)
+		{
+			int chunk = (std::min)(last - first, 14);
 
-		int i = 3;
-		for (Iter p = first; p != last; ++p)
-			packet[i++] = *p;
+			packet[1] = 0x70 | (chunk + 1);
 
-		lc.write(packet, packet + i);
-		this->receive_packet(7);
+			for (int i = 0; i < chunk; ++i)
+				packet[i+3] = *first++;
+
+			lc.write(packet, packet + chunk + 3);
+			this->receive_packet(7);
+		}
 
 		this->send_packet(0x85, memid, start, start >> 8, start >> 16, start >> 24);
 		this->receive_packet(8);
@@ -441,11 +445,13 @@ struct app
 		}
 		else
 		{
+			BOOST_ASSERT(start % md.pagesize == 0);
 			while (first != last)
 			{
-				this->write_mempage(md.memid, start, first, first + md.pagesize);
-				first += md.pagesize;
-				start += md.pagesize;
+				int chunk = (std::min)((std::size_t)(last - first), md.pagesize);
+				this->write_mempage(md.memid, start, first, first + chunk);
+				first += chunk;
+				start += chunk;
 			}
 		}
 	}
@@ -574,44 +580,20 @@ struct app
 		else if (cmd == ":write")
 		{
 			ensure_programming_mode();
+			read_chip_def(m_cd2);
+			chipdef::memorydef md = this->get_memdef(m_cd2, argv[0]);
+
 			if (argc < 1)
 			{
 				std::cerr << "Usage: avricsp <dev> :write <memorytype> [<pagesize>]" << std::endl;
 				return 0;
 			}
 
-			if (std::string("flash") != argv[0])
-			{
-				std::cerr << "error: only flash memory writing is currently supported." << std::endl;
-				return 2;
-			}
-
-			std::size_t pagesize = 0;
-			std::size_t memsize = 0;
 			if (argc > 1)
-				pagesize = boost::lexical_cast<std::size_t>(argv[1]);
-			
-			get_chip_def();
-			if (m_cd != 0)
-			{
-				std::map<std::string, chipdef::memorydef>::const_iterator ci = m_cd->memories.find("flash");
-				if (ci == m_cd->memories.end())
-				{
-					std::cerr << "error: the chip does not have this type of memory" << std::endl;
-					return 4;
-				}
-				pagesize = ci->second.pagesize;
-				memsize = ci->second.size;
-			}
-			
-			if (pagesize == 0)
-			{
-				std::cerr << "abort: the chip is unknown, you must specify the size of memory pages" << std::cerr;
-				return 2;
-			}
-			
+				md.pagesize = boost::lexical_cast<std::size_t>(argv[1]);
+
 			std::istream & fin = std::cin;
-			
+
 			std::vector<uint8_t> program;
 			std::vector<uint8_t> rec_nums;
 			std::string line;
@@ -678,61 +660,13 @@ struct app
 				}
 			}
 			
-			if (memsize != 0 && program.size() > memsize)
+			if (md.size != 0 && program.size() > md.size)
 			{
-				std::cerr << "abort: the program will not fit into the memory" << std::endl;
+				std::cerr << "abort: the program will not fit in" << std::endl;
+				return 4;
 			}
 
-			uint8_t send_buffer[18];
-			send_buffer[0] = 0x80;
-			std::vector<uint8_t> pagebuffer;
-			pagebuffer.resize(pagesize);
-
-			for (std::size_t i = 0; i < program.size(); i += pagesize)
-			{
-				std::size_t program_chunk_size = (std::min)(program.size() - i, pagesize);
-				std::copy(program.begin() + i, program.begin() + i + program_chunk_size, pagebuffer.begin());
-				std::fill(pagebuffer.begin() + program_chunk_size, pagebuffer.end(), 0xff);
-				
-				bool empty = true;
-				for (std::size_t j = 0; empty && j < pagebuffer.size(); ++j)
-				{
-					if (pagebuffer[j] != 0xff)
-						empty = false;
-				}
-				
-				if (empty)
-					continue;
-
-				send_packet(0x65, 1, i, i >> 8, i >> 16, i >> 24);
-				receive_packet(6);
-
-				std::size_t address = 0;
-				while (address < pagebuffer.size())
-				{
-					std::size_t chunk = pagebuffer.size() - address;
-					if (chunk > 12)
-						chunk = 12;
-					
-					std::size_t packet_size = 0;
-					for (; packet_size < chunk; ++packet_size)
-					{
-						send_buffer[packet_size + 4] = pagebuffer[address+packet_size];
-					}
-					
-					send_buffer[1] = 0x70 | (packet_size+2);
-					send_buffer[2] = 1;
-					send_buffer[3] = address/2;
-					lc.write(send_buffer, send_buffer + packet_size + 4);
-					receive_packet(7);
-
-					address += chunk;
-				}
-				
-				std::cout << "Writing page at address " << i << std::endl;
-				send_packet(0x85, 1, i, i >> 8, i >> 16, i >> 24);
-				receive_packet(8);
-			}
+			this->write_memory(md, 0, program.begin(), program.end());
 		}
 		else if (cmd == ":writefuses")
 		{
@@ -837,20 +771,6 @@ struct app
 		}
 		return 0;
 	}
-	
-	void get_chip_def()
-	{
-		if (m_cd != 0)
-			return;
-		
-		send_packet(0x30);
-		receive_packet(3);
-		if (cmd_parser.size() < 3)
-			throw std::runtime_error("failed to read chip signature");
-			
-		signature.assign(cmd_parser.data(), cmd_parser.data() + cmd_parser.size());
-		m_cd = find_chipdef((cmd_parser[0] << 16) | (cmd_parser[1] << 8) | (cmd_parser[2]), chipdefs);
-	}
 
 	void read_chip_def(chipdef & cd)
 	{
@@ -875,10 +795,8 @@ private:
 	std::vector<uint8_t> m_id;
 
 	std::vector<chipdef> chipdefs;
-	std::vector<uint8_t> signature;
 	comm lc;
 	command_parser cmd_parser;
-	chipdef const * m_cd;
 	bool m_no_more_commands;
 
 	chipdef m_cd2;

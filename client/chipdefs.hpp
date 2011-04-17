@@ -16,8 +16,8 @@ struct chipdef
 	struct memorydef
 	{
 		int memid;
-		int size;
-		int pagesize;
+		size_t size;
+		size_t pagesize;
 	};
 	
 	std::map<std::string, memorydef> memories;
