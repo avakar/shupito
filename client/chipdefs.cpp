@@ -48,6 +48,16 @@ void update_chipdef(std::vector<chipdef> const & templates, chipdef & cd)
 			}
 		}
 	}
+
+	if (cd.memories.find("fuses") == cd.memories.end()
+		&& cd.signature.substr(0, 4) == "avr:")
+	{
+		chipdef::memorydef mem;
+		mem.memid = 3;
+		mem.size = 4;
+		mem.pagesize = 0;
+		cd.memories["fuses"] = mem;
+	}
 }
 
 void parse_chipdefs(std::string const & strdefs, std::vector<chipdef> & res)
