@@ -17,6 +17,11 @@ public:
 	{
 	}
 
+	void unselect()
+	{
+		pdi.clear();
+	}
+
 	void handle_command(avrlib::command_parser & cp)
 	{
 		switch (cp.command())

@@ -276,7 +276,10 @@ struct app
 	{
 		if (m_programming_mode)
 			return;
-		
+
+		if (m_current_mode != 0x871e0846 && m_current_mode != 0xc2a4dd67)
+			throw std::runtime_error("error: you must select the programming interface (use the :mode command)");
+
 		send_packet(0x10);
 		receive_packet(1);
 		if (cmd_parser.size() < 1)
@@ -297,6 +300,23 @@ struct app
 		}
 	}
 
+	void print_mode(uint32_t mode)
+	{
+		switch (mode)
+		{
+		case 0x871e0846:
+			std::cout << "mode=avr_spi" << std::endl;
+			break;
+		case 0xc2a4dd67:
+			std::cout << "mode=avrx_pdi" << std::endl;
+			break;
+		case 0:
+			break;
+		default:
+			std::cout << "mode=<unknown>" << std::endl;
+		}
+	}
+
 	int run(int argc, char * argv[])
 	{
 		if (argc < 2)
@@ -311,10 +331,34 @@ struct app
 		
 		send_packet(0x00);
 		receive_packet(0);
-
-		if (cmd_parser.size() != 4)
+		if (cmd_parser.size() != 5 || cmd_parser[0] != 0x40 || cmd_parser[1] != 0xbd
+			|| cmd_parser[2] != 0xe9 || cmd_parser[3] != 0x9f || cmd_parser[4] != 0xea)
+		{
 			throw std::runtime_error("Failed to identify the device on the other side of the comm line.");
+		}
 
+		// Get the list of functions that can be selected into the device
+		send_packet(0x01, 0x02);
+		receive_packet(0);
+		if (cmd_parser.size() % 4 != 1 || cmd_parser[0] != 0x42)
+			throw std::runtime_error("Invalid response.");
+
+		for (size_t i = 1; i < cmd_parser.size(); i += 4)
+		{
+			uint32_t fn = cmd_parser[i] | (cmd_parser[i+1] << 8) | (cmd_parser[i+2] << 16) | (cmd_parser[i+3] << 24);
+			if (fn == 0)
+				continue;
+			m_modes[fn] = i / 4 + 1;
+		}
+
+		// Get the current function.
+		send_packet(0x01, 0x04);
+		receive_packet(0);
+		if (cmd_parser.size() != 5 || cmd_parser[0] != 0x44)
+			throw std::runtime_error("Invalid response.");
+
+		m_current_mode = cmd_parser[1] | (cmd_parser[2] << 8) | (cmd_parser[3] << 16) | (cmd_parser[4] << 24);
+		this->print_mode(m_current_mode);
 		m_id.assign(cmd_parser.data(), cmd_parser.data() + 4);
 
 		int i = 2;
@@ -496,6 +540,34 @@ struct app
 	{
 		if (cmd.empty())
 		{
+		}
+		else if (cmd == ":mode")
+		{
+			if (argc != 1)
+			{
+				std::cerr << "Usage: avricsp <dev> :mode (avr_spi | avrx_pdi)" << std::endl;
+				return 0;
+			}
+
+			std::string new_mode_str = argv[0];
+			uint32_t new_mode = 0;
+			if (new_mode_str == "pdi" || new_mode_str == "avrx_pdi")
+				new_mode = 0xc2a4dd67;
+			else if (new_mode_str == "spi" || new_mode_str == "avr_spi")
+				new_mode = 0x871e0846;
+			else
+				throw std::runtime_error("error: unknown mode, use \"avr_spi\" or \"avrx_pdi\"");
+
+			if (m_modes.find(new_mode) == m_modes.end())
+				throw std::runtime_error("error: the mode is not supported by the programmer");
+			send_packet(0x02, 0x03, m_modes.find(new_mode)->second);
+			receive_packet(0);
+			if (cmd_parser.size() != 2 || cmd_parser[0] != 0x43)
+				throw std::runtime_error("invalid response");
+			if (cmd_parser[1] != 0)
+				throw std::runtime_error("error: error occured while selecting a new mode into the programmer");
+			m_current_mode = new_mode;
+			this->print_mode(m_current_mode);
 		}
 		else if (cmd == ":chipid")
 		{
@@ -781,7 +853,7 @@ struct app
 		receive_packet(3);
 		if (cmd_parser.size() < 3)
 			throw std::runtime_error("failed to read chip signature");
-		cd.signature = "avr:";
+		cd.signature = m_current_mode == 0x871e0846? "avr:": "avrx:";
 		for (size_t i = 0; i < cmd_parser.size(); ++i)
 		{
 			static char const hexdigits[] = "0123456789abcdef";
@@ -793,6 +865,9 @@ struct app
 	
 private:
 	std::vector<uint8_t> m_id;
+
+	std::map<uint32_t, uint32_t> m_modes;
+	uint32_t m_current_mode;
 
 	std::vector<chipdef> chipdefs;
 	comm lc;

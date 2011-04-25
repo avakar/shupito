@@ -18,6 +18,11 @@ public:
 	{
 	}
 
+	void unselect()
+	{
+		spi.clear();
+	}
+
 	void handle_command(avrlib::command_parser & cp)
 	{
 		switch (cp.command())
