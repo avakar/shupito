@@ -2,3 +2,10 @@ syntax: glob
 firmware/default
 eagle.epf
 **.aws
+**.opensdf
+**.sdf
+**.suo
+**.user
+ipch
+Debug
+Release
