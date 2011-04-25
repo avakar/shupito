@@ -5,6 +5,8 @@
 
 struct handler_base
 {
+	virtual bool select() { return true; }
+	virtual void unselect() {}
 	virtual void handle_command(avrlib::command_parser & cp) {}
 };
 

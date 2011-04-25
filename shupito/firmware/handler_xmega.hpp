@@ -78,7 +78,7 @@ public:
 				}
 			}
 			break;
-		case 4: // Read memory
+		case 4: // READ 1'memid 4'addr 1'size
 			if (cp.size() == 6)
 			{
 				bool success = true;
@@ -129,6 +129,7 @@ public:
 			break;
 		case 5:
 			// ERASE 1'memid
+			if (cp.size() == 0)
 			{
 				// CMD = Chip erase
 				pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x40);

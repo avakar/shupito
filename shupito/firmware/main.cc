@@ -15,13 +15,17 @@
 
 #include "handler_base.hpp"
 #include "handler_xmega.hpp"
+#include "handler_avricsp.hpp"
 
 #include "pdi.hpp"
+#include "spi.hpp"
 
 typedef avrlib::pin<avrlib::portd, 4> pdi_clk;
 typedef avrlib::pin<avrlib::portd, 1> pdi_data;
 
-typedef avrlib::async_usart<avrlib::usart1, 64, 64, avrlib::bootseq> com_t;
+typedef avrlib::pin<avrlib::portd, 4> avricsp_reset;
+
+typedef avrlib::async_usart<avrlib::usart1, 64, 64, avrlib::nobootseq> com_t;
 com_t com(38400, true);
 
 ISR(USART1_RXC_vect)
@@ -54,6 +58,8 @@ ISR(USART0_TXC_vect)
 	pdi.intr_txc();
 }
 
+spi_t spi;
+
 void process()
 {
 	pdi.process();
@@ -66,17 +72,22 @@ int main()
 
 	clock.enable(avrlib::timer_fosc_8);
 
+	avrlib::bootseq bootseq;
 	avrlib::command_parser cp;
 	cp.clear();
 
 	handler_xmega<pdi_t<clock_t, pdi_clk, pdi_data>, com_t, clock_t> hxmega(pdi, com, clock);
-	handler_base * handler = &hxmega;
+	handler_avricsp<spi_t, com_t, clock_t, avricsp_reset> havricsp(spi, com, clock);
+	handler_base * handler = &havricsp;
 
+	handler->select();
 	for (;;)
 	{
 		if (!com.empty())
 		{
 			uint8_t ch = cp.push_data(com.read());
+			bootseq.check(ch);
+
 			switch (ch)
 			{
 			case 0:
@@ -89,14 +100,13 @@ int main()
 				com.write(0xe9);
 				break;
 			case 255:
-			case 254:
 				break;
 			default:
-				handler->handle_command(cp);
+				if (ch > 16)
+					cp.clear();
+				else
+					handler->handle_command(cp);
 			}
-
-			if (cp.state() == avrlib::command_parser::simple_command || cp.state() == avrlib::command_parser::bad)
-				cp.clear();
 		}
 
 		if (pdi.rx_ready())
