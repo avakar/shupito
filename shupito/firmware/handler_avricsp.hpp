@@ -180,8 +180,9 @@ public:
 					m_mempage_ptr = (cp[1]) | (cp[2] << 8);
 					// TODO: potentially load the extended address byte
 				}
-				else if (memid == 3)
+				else if (memid == 3) // fuses
 				{
+					m_mempage_ptr = cp[1];
 				}
 				else
 				{
@@ -211,8 +212,18 @@ public:
 						++m_mempage_ptr;
 					}
 				}
-				else if (memid == 3)
+				else if (memid == 3) // fuses
 				{
+					static uint8_t cmds[4] = { 0xE0, 0xA0, 0xA8, 0xA4 };
+
+					for (uint8_t i = 1; i < cp.size(); ++i)
+					{
+						spi.send(0xAC);
+						spi.send(cmds[m_mempage_ptr++ & 0x3]);
+						spi.send(0x00);
+						spi.send(cp[i]);
+						wait(clock, 5000);
+					}
 				}
 				else
 				{
