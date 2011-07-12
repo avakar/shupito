@@ -5,6 +5,7 @@
 #include <boost/lexical_cast.hpp>
 
 const std::string embedded_chipdefs =
+	// lock bits, low fuses, high fuses, extended fuses
 	"atmega48 avr:1e9205 flash=4096:64,eeprom=256:4 cksel:8,9,10,11 sut:12,13 ckout:14 ckdiv8:15 bodlevel:16,17,18 eesave:19"
 		" wdton:20 spien:21:0 dwen:22 rstdisbl:23:1 selfprgen:24\n"
 	"atmega168 avr:1e9406 flash=16384:128,eeprom=512:4"
@@ -12,7 +13,13 @@ const std::string embedded_chipdefs =
 		" wdton:20 spien:21:0 dwen:22 rstdisbl:23:1 bootrst:24 bootsz:25,26\n"
 	"atmega128 avr:1e9702 flash=131072:256,eeprom=4096"
 		" lb:0,1 blb0:2,3 blb1:4,5 cksel:8,9,10,11 sut:12,13 boden:14 bodlevel:15"
-		" bootrst:16 bootsz:17,18 eesave:19 ckopt:20 spien:21 jtagen:22 ocden:23 wdton:24 m103c:25\n"
+		" bootrst:16 bootsz:17,18 eesave:19 ckopt:20 spien:21:0 jtagen:22 ocden:23 wdton:24 m103c:25\n"
+
+	"atmega8u2 avr:1e9389 flash=8192:64,eeprom=256:4"
+		" lb:0,1 blb0:2,3 blb1:4,5"
+		" cksel:8,9,10,11 sut:12,13 ckout:14 ckdiv8:15"
+		" bootrst:16 bootsz:17,18 eesave:19 wdton:20 spien:21:0 rstdsbl:22:1 dwen:23:1"
+		" bodlevel:24,25,26 hwbe:27\n"
 
 	"atxmega128a avrx:1e974600 flash=139264:512,eeprom=2048:32 jtaguid:0,1,2,3,4,5,6,7 wdper:8,9,10,11 wdwper:12,13,14,15 bodpd:16,17 bootrst:21 jtagen:32 wdlock:33 startuptime:34,35 rstdisbl:36:1"
 		" bodlevel:40,41,42 eesave:43 bodact:44,45 lb:56,57 blbat:58,59 blba:60,61 blbb:62,63\n"
