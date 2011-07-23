@@ -1,0 +1,55 @@
+; For 32 or 64 bit Windows from XP to Windows 7. Setup File for DATAQ CDC
+; Copyright (c) 2010 Dataq Instruments, Inc.
+
+[Version]
+Signature="$Windows NT$"
+Class=Ports
+ClassGuid={4D36E978-E325-11CE-BFC1-08002BE10318}
+Provider=%PRVDR%
+CatalogFile=dataq160.cat
+DriverVer=04/21/2010,1.0.3
+
+[SourceDisksNames]
+1=%DriversDisk%,,,
+
+[SourceDisksFiles]
+
+[Manufacturer]
+%MFGNAME%=VirComDevice,NT,NTamd64
+
+[DestinationDirs]
+DefaultDestDir = 12
+
+[VirComDevice.NT]
+%DESCRIPTION%=DriverInstall,USB\VID_0012&PID_0034
+
+[VirComDevice.NTamd64]
+%DESCRIPTION%=DriverInstall,USB\VID_0012&PID_0034
+
+[DriverInstall.NT]
+Include=mdmcpq.inf
+CopyFiles=FakeModemCopyFileSection
+AddReg=DriverInstall.NT.AddReg
+
+[DriverInstall.NT.AddReg]
+HKR,,DevLoader,,*ntkern
+HKR,,NTMPDriver,,usbser.sys
+HKR,,EnumPropPages32,,"MsPorts.dll,SerialPortPropPageProvider"
+
+[DriverInstall.NT.Services]
+AddService=usbser, 0x00000002, DriverServiceInst
+
+[DriverServiceInst]
+DisplayName=%SERVICE%
+ServiceType = 1 ; SERVICE_KERNEL_DRIVER
+StartType = 3 ; SERVICE_DEMAND_START
+ErrorControl = 1 ; SERVICE_ERROR_NORMAL
+ServiceBinary= %12%\usbser.sys
+LoadOrderGroup = Base
+
+[Strings]
+PRVDR       = "DATAQ"
+MFGNAME     = "DATAQ Instruments, Inc."
+DESCRIPTION = "DATAQ USB CDC"
+SERVICE     = "DATAQ USB CDC driver"
+DriversDisk = "DATAQ DI-160 Drivers Disk"
