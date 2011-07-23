@@ -15,7 +15,8 @@ const std::string embedded_chipdefs =
 		" lb:0,1 blb0:2,3 blb1:4,5 cksel:8,9,10,11 sut:12,13 boden:14 bodlevel:15"
 		" bootrst:16 bootsz:17,18 eesave:19 ckopt:20 spien:21:0 jtagen:22 ocden:23 wdton:24 m103c:25\n"
 
-	"atmega8u2 avr:1e9389 flash=8192:64,eeprom=256:4"
+	// the datasheet rev D is wrong, the page size is 64w/128b
+	"atmega8u2 avr:1e9389 flash=8192:128,eeprom=256:4"
 		" lb:0,1 blb0:2,3 blb1:4,5"
 		" cksel:8,9,10,11 sut:12,13 ckout:14 ckdiv8:15"
 		" bootrst:16 bootsz:17,18 eesave:19 wdton:20 spien:21:0 rstdsbl:22:1 dwen:23:1"
