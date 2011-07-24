@@ -23,7 +23,12 @@ ISR(USART1_RX_vect)
 #define EPDIR_OUT 0
 #define EPDIR_IN 1
 
+#define EPSIZE_32 2
 #define EPSIZE_64 3
+
+#define EPBK_ONE 0
+#define EPBK_TWO 1
+
 
 enum usb_request_types {
 	urt_set_address = 5,
@@ -31,173 +36,14 @@ enum usb_request_types {
 	urt_set_configuration = 9,
 };
 
-enum usb_descriptor_types {
-	udt_device_descriptor = 1,
-	udt_configuration_descriptor = 2,
-	udt_string_descriptor = 3,
-	udt_interface_descriptor = 4,
-	udt_endpoint_descriptor = 5,
-};
+#include "usb_descriptors.h"
 
-struct usb_device_desc_t
-{
-	uint8_t bLength;
-	uint8_t bDescriptorType;
-	uint16_t bcdUSB;
-	uint8_t bDeviceClass;
-	uint8_t bDeviceSubClass;
-	uint8_t bDeviceProtocol;
-	uint8_t bMaxPacketSize0;
-	uint16_t idVendor;
-	uint16_t idProduct;
-	uint16_t bcdDevice;
-	uint8_t iManufacturer;
-	uint8_t iProduct;
-	uint8_t iSerialNumber;
-	uint8_t bNumConfigurations;
-};
-
-usb_device_desc_t const my_device_desc PROGMEM = {
-	sizeof my_device_desc,
-	udt_device_descriptor,
-	0x0010,
-	0xFF,
-	0xFF,
-	0xFF,
-	64,
-	0x12,
-	0x34,
-	0x5678,
-	5,
-	1,
-	2,
-	1,
-};
-
-struct usb_config_desc_t
-{
-	uint8_t bLength;
-	uint8_t bDescriptorType;
-	uint16_t wTotalLength;
-	uint8_t bNumInterfaces;
-	uint8_t bConfigurationValue;
-	uint8_t iConfiguration;
-	uint8_t bmAttributes;
-	uint8_t bMaxPower;
-};
-
-struct usb_interface_desc_t
-{
-	uint8_t bLength;
-	uint8_t bDescriptorType;
-	uint8_t bInterfaceNumber;
-	uint8_t bAlternateSettings;
-	uint8_t bNumEndpoints;
-	uint8_t bInterfaceClass;
-	uint8_t bInterfaceSubClass;
-	uint8_t bInterfaceProtocol;
-	uint8_t iInterface;
-};
-
-struct usb_endpoint_desc_t
-{
-	uint8_t bLength;
-	uint8_t bDescriptorType;
-	uint8_t bEndpointAddress;
-	uint8_t bmAttributes;
-	uint16_t wMaxPacketSize;
-	uint8_t bInterval;
-};
-
-struct
-{
-	usb_config_desc_t config;
-	usb_interface_desc_t cdc_comm_intf;
-	usb_interface_desc_t cdc_data_intf;
-	usb_endpoint_desc_t cdc_data_in_endp;
-	usb_endpoint_desc_t cdc_data_out_endp;
-} __attribute__((packed)) const PROGMEM config0_desc = {
-	{
-		sizeof config0_desc.config,
-		udt_configuration_descriptor,
-		sizeof config0_desc,
-		1,
-		1,
-		3,
-		0x80,
-		50,
-	},
-	{
-		sizeof config0_desc.cdc_comm_intf,
-		udt_interface_descriptor,
-		0,
-		0,
-		0, // bNumEndpoints
-		0x02, // Communications Interface Class
-		0x02, // Abstract Control Model
-		0x00, // No protocol; just raw data
-		4,
-	},
-	{
-		sizeof config0_desc.cdc_data_intf,
-		udt_interface_descriptor,
-		1,
-		0,
-		2, // bNumEndpoints
-		0x0A, // Data Interface Class
-		0x00,
-		0x00,
-		4,
-	},
-	{
-		sizeof config0_desc.cdc_data_in_endp,
-		udt_endpoint_descriptor,
-		0x80 | 1, // bEndpointNumber
-		2, // bmAttributes = BULK
-		64, // wMaxPacketSize
-		1, // bInterval
-	},
-	{
-		sizeof config0_desc.cdc_data_out_endp,
-		udt_endpoint_descriptor,
-		2, // bEndpointNumber
-		2, // bmAttributes = BULK
-		64, // wMaxPacketSize
-		1, // bInterval
-	},
-};
-
-static uint16_t PROGMEM const languages_desc[] = { (udt_string_descriptor << 8) | 4,
-	0x0409 };
-static uint16_t PROGMEM const manufacturer_string[] = { (udt_string_descriptor << 8) | 6,
-	'm', 'a' };
-static uint16_t PROGMEM const product_string[] = { (udt_string_descriptor << 8) | 6,
-	'p', 'r' };
-static uint16_t PROGMEM const serial_number_string[] = { (udt_string_descriptor << 8) | 6,
-	's', 'n' };
-static uint16_t PROGMEM const interface_string[] = { (udt_string_descriptor << 8) | 6,
-	'i', 'n' };
-
-static struct {
-	uint16_t index;
-	uint8_t PROGMEM const * first;
-	uint8_t PROGMEM const * last;
-} const usb_descriptors[] = {
-#define DESC(index, value) { index, reinterpret_cast<uint8_t PROGMEM const *>(&value), reinterpret_cast<uint8_t PROGMEM const *>(&value) + sizeof value }
-	DESC(0x100, my_device_desc),
-	DESC(0x200, config0_desc),
-	DESC(0x300, languages_desc),
-	DESC(0x301, manufacturer_string),
-	DESC(0x302, product_string),
-	DESC(0x303, serial_number_string),
-	DESC(0x304, interface_string),
-};
-
+template <typename InStream>
 class usb_t
 {
 public:
-	usb_t()
-		: m_resets(0), m_sofs(0), m_enabled(false), last_intr(0), last_i(0)
+	explicit usb_t(InStream & in)
+		: m_in(in), m_resets(0), m_sofs(0), m_enabled(false), last_intr(0), last_i1(0), last_i2(0xcc)
 	{
 		m_ep0_transaction.m_request = 0xff;
 	}
@@ -304,24 +150,35 @@ public:
 			UEINTX = ~(1<<RXOUTI);
 		}
 
-		UENUM = 2;
+		UENUM = 3;
+
+		UEINTX = ~((1<<NAKOUTI)|(1<<TXINI));
+		
 		if (UEINTX & (1<<RXOUTI))
 		{
 			UEINTX = ~(1<<RXOUTI);
-
 			while (UEBCLX)
 				com.write(UEDATX);
-
 			UEINTX = ~(1<<FIFOCON);
 		}
 
+		UENUM = 4;
+		if (!m_in.empty() && UEINTX & (1<<TXINI))
+		{
+			UEINTX = ~(1<<TXINI);
+			while (!m_in.empty() && (UEINTX & (1<<RWAL)) != 0)
+				UEDATX = m_in.read();
+			UEINTX = ~(1<<FIFOCON);
+		}
 	}
+
+	InStream & m_in;
 
 	uint16_t m_resets, m_sofs;
 
 private:
 	bool m_enabled;
-	uint8_t last_intr, last_i;
+	uint8_t last_intr, last_i1, last_i2;
 
 	void configure_ep0()
 	{
@@ -329,7 +186,7 @@ private:
 
 		// The endpoint 0 should already be enabled.
 		UECFG0X = (EPTYPE_CONTROL<<6)|(EPDIR_OUT<<0);
-		UECFG1X = (EPSIZE_64<<4)|(1<<ALLOC);
+		UECFG1X = (EPSIZE_32<<4)|(1<<ALLOC);
 
 		// XXX: The endpoint 0 is not automatically enabled after USB reset as specificed in the datasheet.
 		UECONX = (1<<EPEN);
@@ -358,10 +215,10 @@ private:
 
 				for (uint8_t i = 0; i < sizeof usb_descriptors / sizeof usb_descriptors[0]; ++i)
 				{
-					if (usb_descriptors[i].index == wValue)
+					if (usb_descriptor_map[i].index == wValue)
 					{
-						m_ep0_transaction.m_get_descriptor.pFirst = usb_descriptors[i].first;
-						m_ep0_transaction.m_get_descriptor.pLast = usb_descriptors[i].last;
+						m_ep0_transaction.m_get_descriptor.pFirst = usb_descriptors + usb_descriptor_map[i].first;
+						m_ep0_transaction.m_get_descriptor.pLast = usb_descriptors + usb_descriptor_map[i].last;
 						break;
 					}
 				}
@@ -388,6 +245,8 @@ private:
 			send(com, "SET_CONFIGURATION ");
 			send_hex(com, wValue);
 			send(com, "\r\n");
+
+			set_config();
 			break;
 
 		default:
@@ -419,7 +278,7 @@ private:
 		case urt_get_descriptor:
 			{
 				uint8_t packet_size = 0;
-				for (; packet_size < 64
+				for (; packet_size < 32
 					&& m_ep0_transaction.m_get_descriptor.pFirst != m_ep0_transaction.m_get_descriptor.pLast;
 					++m_ep0_transaction.m_get_descriptor.pFirst)
 				{
@@ -429,18 +288,13 @@ private:
 
 				UEINTX = ~(1<<TXINI) & ~(1<<RXOUTI);
 
-				if (packet_size < 64)
+				if (packet_size < 32)
 					m_ep0_transaction.m_request = 0xff;
 			}
 			break;
 
 		case urt_set_address:
 			UDADDR |= (1<<ADDEN);
-			m_ep0_transaction.m_request = 0xff;
-			break;
-
-		case urt_set_configuration:
-			set_config();
 			m_ep0_transaction.m_request = 0xff;
 			break;
 
@@ -451,15 +305,21 @@ private:
 
 	void set_config()
 	{
-		UENUM = 1;
-		UECFG0X = (EPTYPE_CONTROL<<6)|(EPDIR_IN<<0);
-		UECFG1X = (EPSIZE_64<<4)|(1<<ALLOC);
-		UECONX = (1<<EPEN);
+		UERST = (1<<1)|(1<<2);
+		UERST = 0;
 
-		UENUM = 2;
-		UECFG0X = (EPTYPE_CONTROL<<6)|(EPDIR_OUT<<0);
+		UENUM = 3;
+		UECONX = (1<<RSTDT)|(1<<EPEN);
+		UECFG0X = (EPTYPE_BULK<<6)|(EPDIR_OUT<<0);
 		UECFG1X = (EPSIZE_64<<4)|(1<<ALLOC);
-		UECONX = (1<<EPEN);
+
+
+		UENUM = 4;
+		UECONX = (1<<RSTDT)|(1<<EPEN);
+		UECFG0X = (EPTYPE_BULK<<6)|(EPDIR_IN<<0);
+		UECFG1X = (EPSIZE_32<<4)|(EPBK_TWO<<2)|(1<<ALLOC);
+
+		UENUM = 0;
 	}
 
 	struct ep0_transaction_t
@@ -469,8 +329,8 @@ private:
 		{
 			struct
 			{
-				uint8_t const * pFirst;
-				uint8_t const * pLast;
+				prog_uint8_t const * pFirst;
+				prog_uint8_t const * pLast;
 			} m_get_descriptor;
 		};
 	} m_ep0_transaction;
@@ -485,41 +345,40 @@ int main()
 
 	sei();
 
-	usb_t usb;
+	usb_t<com_t> usb(com);
+	usb.init();
 
 	REGCR = (1<<REGDIS);
 
 	for (;;)
 	{
-		if (!com.empty())
+		/*if (!com.empty())
 		{
 			char ch = com.read();
 			switch (ch)
 			{
-			case 'i':
-				usb.init();
-				break;
-			case 's':
-				break;
 			case '?':
 			default:
 				{
-					uint8_t udint = UDINT;
+					send(com, "Shupito USB comm chip.\r\n");
 
-					send(com, "Shupito USB comm chip.\r\nr: ");
-					send_hex(com, usb.m_resets);
-					send(com, "\r\nsofs: ");
-					send_hex(com, usb.m_sofs);
-					send(com, "\r\nUDINT: ");
-					send_hex(com, udint);
-					send(com, "\r\nUEINTX: ");
-					send_hex(com, UEINT);
-					send(com, "\r\nUESTA0X: ");
-					send_hex(com, UESTA0X);
-					send(com, "\r\n");
+					for (uint8_t i = 0; i < 5; ++i)
+					{
+						UENUM = i;
+						static prog_char const fmt[] PROGMEM =
+							"----\r\nUENUM: %x\r\n"
+							"UECONX: %x\r\n"
+							"UECFG0X: %x\r\n"
+							"UECFG1X: %x\r\n"
+							"UESTA0X: %x\r\n"
+							"UESTA1X: %x\r\n"
+							"UEINTX: %x\r\n"
+							"UEBCLX: %x\r\n";
+						avrlib::format_pgm(com,fmt) % i % UECONX % UECFG0X % UECFG1X % UESTA0X % UESTA1X % UEINTX % UEBCLX;
+					}
 				}
 			}
-		}
+		}*/
 
 		com.process_tx();
 		usb.process();
