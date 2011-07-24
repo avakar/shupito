@@ -21,9 +21,16 @@ def descriptors():
             bmAttributes=ConfigurationAttributes.Sig,
             bMaxPower=50,
             interfaces=[
+#                InterfaceDescriptor(
+#                    bInterfaceNumber=0x01,
+#                    bInterfaceClass=0x02,
+#                    bInterfaceSubClass=0x02,
+#                    bInterfaceProtocol=0x01,
+#                    endpoints=[]
+#                    ),
                 InterfaceDescriptor(
-                    bInterfaceNumber=1,
-                    bInterfaceClass=0,
+                    bInterfaceNumber=0x02,
+                    bInterfaceClass=0x0A,
                     bInterfaceSubClass=0,
                     bInterfaceProtocol=0,
                     endpoints=[
@@ -61,6 +68,9 @@ class DescriptorType:
     OTG = 9
     DEBUG = 10
     INTERFACE_ASSOCIATION = 11
+
+    CS_INTERFACE = 0x24
+    CS_ENDPOINT = 0x25
 
 class ConfigurationAttributes:
     Sig = (1<<7)
@@ -131,7 +141,7 @@ def print_descriptors(fout, descriptors):
     for key, value in sorted(descriptors.iteritems()):
         oldlen = len(data)
         data += value
-        fout.write('    { 0x%x, %d, %d },\n' % (key, oldlen, len(data)))
+        fout.write('    { 0x%03x, 0x%03x, 0x%03x }, // length: 0x%03x (%d)\n' % (key, oldlen, len(data), len(data) - oldlen, len(data) - oldlen))
     fout.write('};\n\nstatic prog_uint8_t const usb_descriptors[] PROGMEM = {\n')
 
     while data:
