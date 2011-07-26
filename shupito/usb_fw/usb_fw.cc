@@ -31,6 +31,7 @@ ISR(USART1_RX_vect)
 
 
 enum usb_request_types {
+	urt_get_status = 0,
 	urt_set_address = 5,
 	urt_get_descriptor = 6,
 	urt_set_configuration = 9,
@@ -78,66 +79,47 @@ public:
 		if (!m_enabled)
 			return;
 
-		/*if (UDINT & (1<<WAKEUPI))
-		{
-			UDINT = ~(1<<WAKEUPI);
-		}*/
-
-		UDINT = ~((1<<WAKEUPI)|(1<<SUSPI));
-
-		if (UDINT & (1<<SOFI))
-		{
-			UDINT = ~(1<<SOFI);
-			++m_sofs;
-		}
+		UDINT = ~((1<<WAKEUPI)|(1<<SUSPI)|(1<<SOFI));
 
 		if (UDINT & (1<<EORSTI))
 		{
 			UDINT = ~(1<<EORSTI);
 			configure_ep0();
-			UERST = 1;
-			UERST = 0;
-			++m_resets;
+			send(com, "RESET\r\n");
 		}
 
 		UENUM = 0;
-		/*uint8_t capture = UEINTX;
-		if (last_intr != capture)
-		{
-			last_intr = capture;
-			com.write('I');
-			send_hex(com, capture);
-			send(com, "\r\n");
-		}*/
-
 		if (UEINTX & (1<<RXSTPI))
 		{
-			if (UEBCLX == 8)
-			{
-				uint8_t bmRequestType = UEDATX;
-				uint8_t bRequest = UEDATX;
+			uint8_t bmRequestType = UEDATX;
+			uint8_t bRequest = UEDATX;
 
-				uint16_t wValue = UEDATX;
-				wValue |= UEDATX << 8;
+			uint16_t wValue = UEDATX;
+			wValue |= UEDATX << 8;
 
-				uint16_t wIndex = UEDATX;
-				wIndex |= UEDATX << 8;
+			uint16_t wIndex = UEDATX;
+			wIndex |= UEDATX << 8;
 
-				uint16_t wLength = UEDATX;
-				wLength |= UEDATX << 8;
+			uint16_t wLength = UEDATX;
+			wLength |= UEDATX << 8;
 
-				UEINTX = ~(1<<RXSTPI);
+			UEINTX = ~(1<<RXSTPI);
 
-				ep0_setup(bmRequestType, bRequest, wValue, wIndex, wLength);
-			}
-			else
-			{
-				// This shouldn't happen; the setup packet failed to be 8 bytes long
-				// and is therefore malformed. It should be ignored.
-				UEINTX = ~(1<<RXSTPI);
-			}
+			format(com, "SETUP %x:%x %x:%x %x\r\n") % bmRequestType % bRequest % wValue % wIndex % wLength;
 
+			ep0_setup(bmRequestType, bRequest, wValue, wIndex, wLength);
 		}
+
+		if (UEINTX & (1<<NAKOUTI))
+			send(com, "out nak\r\n");
+
+		if (UEINTX & (1<<NAKINI))
+			send(com, "in nak\r\n");
+
+		if (UEINTX & (1<<STALLEDI))
+			send(com, "stall\r\n");
+
+		UEINTX = ~((1<<NAKOUTI)|(1<<NAKINI)|(1<<STALLEDI));
 
 		if (m_ep0_transaction.m_request != 0xff && (UEINTX & (1<<TXINI)) != 0)
 		{
@@ -200,15 +182,19 @@ private:
 
 		switch (bRequest)
 		{
+		case urt_get_status:
+			send(com, "get_status\r\n");
+			UEDATX = 0;
+			UEDATX = 0;
+			UEINTX = ~(1<<TXINI);
+			break;
 		case urt_set_address:
+			send(com, "set_address\r\n");
 			UDADDR = wValue & 0x7f;
-			UEINTX = ~(1<<TXINI) & ~(1<<RXOUTI);
-
-			send(com, "SET_ADDRESS ");
-			send_hex(com, wValue);
-			send(com, "\r\n");
+			UEINTX = ~(1<<TXINI);
 			break;
 		case urt_get_descriptor:
+			send(com, "get_descriptor\r\n");
 			{
 				m_ep0_transaction.m_get_descriptor.pFirst = 0;
 				m_ep0_transaction.m_get_descriptor.pLast = 0;
@@ -223,56 +209,41 @@ private:
 					}
 				}
 
+				if (m_ep0_transaction.m_get_descriptor.pFirst == 0)
+				{
+					UECONX = (1<<STALLRQ)|(1<<EPEN);
+					m_ep0_transaction.m_request = 0xff;
+					return;
+				}
+
 				// Make sure that at most the requested amount of data gets transmitted.
 				if (uint16_t(m_ep0_transaction.m_get_descriptor.pLast - m_ep0_transaction.m_get_descriptor.pFirst) > wLength)
 					m_ep0_transaction.m_get_descriptor.pLast = m_ep0_transaction.m_get_descriptor.pFirst + wLength;
 			}
 
-			send(com, "GET_DESCRIPTOR: ");
-			send_hex(com, wValue);
-			send(com, ", ");
-			send_hex(com, wIndex);
-			send(com, ", ");
-			send_hex(com, wLength);
-			send(com, "\r\n");
-
 			ep0_in_ack();
 			break;
 
 		case urt_set_configuration:
+			send(com, "set_configuration\r\n");
 			UEINTX = ~(1<<TXINI) & ~(1<<RXOUTI);
-
-			send(com, "SET_CONFIGURATION ");
-			send_hex(com, wValue);
-			send(com, "\r\n");
-
 			set_config();
 			break;
 
 		default:
+			UECONX = (1<<STALLRQ)|(1<<EPEN);
 			m_ep0_transaction.m_request = 0xff;
-			send(com, "SETUP ");
-			send_hex(com, bmRequestType);
-			send(com, ", ");
-			send_hex(com, bRequest);
-			send(com, ", ");
-			send_hex(com, wValue);
-			send(com, ", ");
-			send_hex(com, wIndex);
-			send(com, ", ");
-			send_hex(com, wLength);
-			send(com, "\r\n");
 		}
 	}
 
 	void ep0_out()
 	{
-		send(com, "OUT\r\n");
+		send(com, "out\r\n");
 	}
 
 	void ep0_in_ack()
 	{
-		send(com, "IN\r\n");
+		send(com, "in\r\n");
 		switch (m_ep0_transaction.m_request)
 		{
 		case urt_get_descriptor:
@@ -286,7 +257,7 @@ private:
 					++packet_size;
 				}
 
-				UEINTX = ~(1<<TXINI) & ~(1<<RXOUTI);
+				UEINTX = ~(1<<TXINI);
 
 				if (packet_size < 32)
 					m_ep0_transaction.m_request = 0xff;
