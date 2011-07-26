@@ -23,6 +23,8 @@ ISR(USART1_RX_vect)
 #define EPDIR_OUT 0
 #define EPDIR_IN 1
 
+#define EPSIZE_8  0
+#define EPSIZE_16 1
 #define EPSIZE_32 2
 #define EPSIZE_64 3
 
@@ -79,8 +81,6 @@ public:
 		if (!m_enabled)
 			return;
 
-		UDINT = ~((1<<WAKEUPI)|(1<<SUSPI)|(1<<SOFI));
-
 		if (UDINT & (1<<EORSTI))
 		{
 			UDINT = ~(1<<EORSTI);
@@ -105,21 +105,8 @@ public:
 
 			UEINTX = ~(1<<RXSTPI);
 
-			format(com, "SETUP %x:%x %x:%x %x\r\n") % bmRequestType % bRequest % wValue % wIndex % wLength;
-
 			ep0_setup(bmRequestType, bRequest, wValue, wIndex, wLength);
 		}
-
-		if (UEINTX & (1<<NAKOUTI))
-			send(com, "out nak\r\n");
-
-		if (UEINTX & (1<<NAKINI))
-			send(com, "in nak\r\n");
-
-		if (UEINTX & (1<<STALLEDI))
-			send(com, "stall\r\n");
-
-		UEINTX = ~((1<<NAKOUTI)|(1<<NAKINI)|(1<<STALLEDI));
 
 		if (m_ep0_transaction.m_request != 0xff && (UEINTX & (1<<TXINI)) != 0)
 		{
@@ -129,8 +116,15 @@ public:
 		if (UEINTX & (1<<RXOUTI))
 		{
 			ep0_out();
-			UEINTX = ~(1<<RXOUTI);
 		}
+
+		UENUM = 1;
+
+		if (UEINTX & (1<<NAKINI))
+		{
+			UEINTX = ~(1<<NAKINI);
+		}
+
 
 		UENUM = 3;
 
@@ -166,14 +160,12 @@ private:
 	{
 		UENUM = 0;
 
-		// The endpoint 0 should already be enabled.
-		UECFG0X = (EPTYPE_CONTROL<<6)|(EPDIR_OUT<<0);
-		UECFG1X = (EPSIZE_32<<4)|(1<<ALLOC);
-
 		// XXX: The endpoint 0 is not automatically enabled after USB reset as specificed in the datasheet.
 		UECONX = (1<<EPEN);
 
-		//UEINTX = 0;
+		// The endpoint 0 should already be enabled.
+		UECFG0X = (EPTYPE_CONTROL<<6)|(EPDIR_OUT<<0);
+		UECFG1X = (EPSIZE_32<<4)|(1<<ALLOC);
 	}
 
 	void ep0_setup(uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint16_t wLength)
@@ -183,18 +175,15 @@ private:
 		switch (bRequest)
 		{
 		case urt_get_status:
-			send(com, "get_status\r\n");
 			UEDATX = 0;
 			UEDATX = 0;
 			UEINTX = ~(1<<TXINI);
 			break;
 		case urt_set_address:
-			send(com, "set_address\r\n");
 			UDADDR = wValue & 0x7f;
 			UEINTX = ~(1<<TXINI);
 			break;
 		case urt_get_descriptor:
-			send(com, "get_descriptor\r\n");
 			{
 				m_ep0_transaction.m_get_descriptor.pFirst = 0;
 				m_ep0_transaction.m_get_descriptor.pLast = 0;
@@ -225,12 +214,20 @@ private:
 			break;
 
 		case urt_set_configuration:
-			send(com, "set_configuration\r\n");
-			UEINTX = ~(1<<TXINI) & ~(1<<RXOUTI);
 			set_config();
+			UEINTX = ~(1<<TXINI);
+			break;
+
+		case 0x20: // SET_LINE_CODING
+			send(com, "set_line_coding setup\r\n");
+			break;
+		
+		case 0x22: // SET_CONTROL_LINE_STATE
+			UEINTX = ~(1<<TXINI);
 			break;
 
 		default:
+			format(com, "SETUP %x:%x %x:%x %x\r\n") % bmRequestType % bRequest % wValue % wIndex % wLength;
 			UECONX = (1<<STALLRQ)|(1<<EPEN);
 			m_ep0_transaction.m_request = 0xff;
 		}
@@ -239,11 +236,28 @@ private:
 	void ep0_out()
 	{
 		send(com, "out\r\n");
+		switch (m_ep0_transaction.m_request)
+		{
+		case 0x20: // SET_LINE_CODING
+			{
+				uint32_t dte_rate = UEDATX;
+				dte_rate |= uint32_t(UEDATX) << 8;
+				dte_rate |= uint32_t(UEDATX) << 16;
+				dte_rate |= uint32_t(UEDATX) << 24;
+				format(com, "set_line_conding %x\r\n") % dte_rate;
+			}
+			UEINTX = ~(1<<RXOUTI);
+
+			m_ep0_transaction.m_request = 0xff;
+			UEINTX = ~(1<<TXINI);
+			break;
+		default:
+			UEINTX = ~(1<<RXOUTI);
+		}
 	}
 
 	void ep0_in_ack()
 	{
-		send(com, "in\r\n");
 		switch (m_ep0_transaction.m_request)
 		{
 		case urt_get_descriptor:
@@ -269,6 +283,9 @@ private:
 			m_ep0_transaction.m_request = 0xff;
 			break;
 
+		case 0x20:
+			break;
+
 		default:
 			m_ep0_transaction.m_request = 0xff;
 		}
@@ -276,8 +293,15 @@ private:
 
 	void set_config()
 	{
-		UERST = (1<<1)|(1<<2);
+		send(com, "set_config\r\n");
+
+		UERST = (1<<1)|(1<<3)|(1<<4);
 		UERST = 0;
+
+		UENUM = 1;
+		UECONX = (1<<RSTDT)|(1<<EPEN);
+		UECFG0X = (EPTYPE_INTERRUPT<<6)|(EPDIR_IN<<0);
+		UECFG1X = (EPSIZE_8<<4)|(1<<ALLOC);
 
 		UENUM = 3;
 		UECONX = (1<<RSTDT)|(1<<EPEN);
@@ -314,12 +338,13 @@ int main()
 	CLKPR = (1<<CLKPCE);
 	CLKPR = (1<<CLKPS0);
 
+	REGCR = (1<<REGDIS);
+
 	sei();
 
 	usb_t<com_t> usb(com);
 	usb.init();
 
-	REGCR = (1<<REGDIS);
 
 	for (;;)
 	{

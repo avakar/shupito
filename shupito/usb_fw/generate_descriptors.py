@@ -5,9 +5,9 @@ def descriptors():
     return {
         0x100: DeviceDescriptor(
             bcdUSB=0x200,
-            bDeviceClass=0xFF,
-            bDeviceSubClass=0xFF,
-            bDeviceProtocol=0xFF,
+            bDeviceClass=0x02,
+            bDeviceSubClass=0x00,
+            bDeviceProtocol=0x00,
             bMaxPacketSize0=32,
             idVendor=0x4a61,
             idProduct=0x679a,
@@ -21,15 +21,27 @@ def descriptors():
             bmAttributes=ConfigurationAttributes.Sig,
             bMaxPower=50,
             interfaces=[
-#                InterfaceDescriptor(
-#                    bInterfaceNumber=0x01,
-#                    bInterfaceClass=0x02,
-#                    bInterfaceSubClass=0x02,
-#                    bInterfaceProtocol=0x01,
-#                    endpoints=[]
-#                    ),
                 InterfaceDescriptor(
-                    bInterfaceNumber=0x02,
+                    bInterfaceNumber=0x00,
+                    bInterfaceClass=0x02,
+                    bInterfaceSubClass=0x02,
+                    bInterfaceProtocol=0x01,
+                    functional=[
+                        CdcHeaderDescriptor(bcdCDC=0x100),
+                        CdcCallManagementDescriptor(bmCapabilities=0, bDataInterface=0x01),
+                        CdcAcmDescriptor(bmCapabilities=0),
+                        CdcUnionDescriptor(bControllingInterface=0, bSubordinateInterfaces=[1]),
+                        ],
+                    endpoints=[
+                        EndpointDescriptor(
+                            bEndpointAddress=1 | Endpoint.In,
+                            bmAttributes=Endpoint.Interrupt,
+                            wMaxPacketSize=8,
+                            bInterval=16)
+                        ],
+                    ),
+                InterfaceDescriptor(
+                    bInterfaceNumber=0x01,
                     bInterfaceClass=0x0A,
                     bInterfaceSubClass=0,
                     bInterfaceProtocol=0,
@@ -116,11 +128,11 @@ def ConfigurationDescriptor(bConfigurationValue=None, iConfiguration=0,
     return res + ''.join(interfaces)
 
 def InterfaceDescriptor(bInterfaceNumber=None, bAlternateSetting=0, bInterfaceClass=None,
-        bInterfaceSubClass=None, bInterfaceProtocol=None, iInterface=0, endpoints=None):
+        bInterfaceSubClass=None, bInterfaceProtocol=None, iInterface=0, endpoints=[], functional=[]):
     return pack('<BBBBBBBBB',
         9, DescriptorType.INTERFACE,
         bInterfaceNumber, bAlternateSetting, len(endpoints), bInterfaceClass, bInterfaceSubClass,
-        bInterfaceProtocol, iInterface) + ''.join(endpoints)
+        bInterfaceProtocol, iInterface) + ''.join(functional) + ''.join(endpoints)
 
 def EndpointDescriptor(bEndpointAddress=None, bmAttributes=None, wMaxPacketSize=None, bInterval=None):
     return pack('<BBBBHB',
@@ -134,6 +146,19 @@ def StringDescriptor(s):
 def LangidsDescriptor(langids):
     return (pack('<BB', 2 + 2*len(langids), DescriptorType.STRING)
         + ''.join((pack('<H', langid) for langid in langids)))
+
+def CdcHeaderDescriptor(bcdCDC):
+    return pack('<BBBH', 5, DescriptorType.CS_INTERFACE, 0x00, bcdCDC)
+
+def CdcUnionDescriptor(bControllingInterface, bSubordinateInterfaces):
+    return (pack('<BBBB', 4 + len(bSubordinateInterfaces), DescriptorType.CS_INTERFACE, 0x06, bControllingInterface)
+        + ''.join((pack('<B', bSubordinateInterface) for bSubordinateInterface in bSubordinateInterfaces)))
+
+def CdcCallManagementDescriptor(bmCapabilities, bDataInterface):
+    return pack('<BBBBB', 5, DescriptorType.CS_INTERFACE, 0x01, bmCapabilities, bDataInterface)
+
+def CdcAcmDescriptor(bmCapabilities):
+    return pack('<BBBB', 4, DescriptorType.CS_INTERFACE, 0x02, bmCapabilities)
 
 def print_descriptors(fout, descriptors):
     fout.write('struct { uint16_t index, first, last; } const usb_descriptor_map[] = {\n')
