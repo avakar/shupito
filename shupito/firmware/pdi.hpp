@@ -14,6 +14,15 @@ public:
 
 	void clear()
 	{
+		if (m_state != st_disabled)
+			return;
+
+		while (m_state != st_tx)
+			this->process();
+
+		while ((UCSR0A & (1<<TXC0)) == 0)
+			this->process();
+
 		PdiClk::output(false);
 		PdiClk::clear();
 

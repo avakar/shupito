@@ -28,13 +28,15 @@ public:
 		{
 		case 1:
 			{
+				uint8_t pdi_status = 0;
+
 				// Enable programming mode
 				pdi.init();
+				pdi_stcs(pdi, 0x01, 0x59); // Ensure RESET
 				pdi_key(pdi, 0x1289AB45CDD888FFull);
 
 				typename clock_t::time_type t = clock.value();
 
-				uint8_t pdi_status = 0;
 				bool success = true;
 				while (success && (pdi_status & 0x02) == 0 && clock.value() - t < 1000000)
 				{
@@ -44,11 +46,14 @@ public:
 
 				com.write(0x80);
 				com.write(0x11);
-				com.write(!success? 1: (pdi_status & 0x02) == 0? 3: 0);
+				com.write(!success? 1: (pdi_status & 0x02)  == 0? 3: 0);
 			}
 			break;
-		case 2:
-			// Leave programming mode
+		case 2: // Leave programming mode
+
+			// Clear the RESET register first
+			pdi_stcs(pdi, 0x01, 0x00);
+
 			pdi.clear();
 
 			com.write(0x80);
