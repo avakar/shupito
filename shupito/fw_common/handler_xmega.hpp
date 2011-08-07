@@ -2,6 +2,7 @@
 #define SHUPITO_FIRMWARE_HANDLER_XMEGA_HPP
 
 #include "handler_base.hpp"
+#include "pdi_instr.hpp"
 
 template <typename Pdi, typename Com, typename Clock>
 class handler_xmega
@@ -32,6 +33,9 @@ public:
 
 				// Enable programming mode
 				pdi.init();
+				while (!pdi.tx_ready())
+					process();
+
 				pdi_stcs(pdi, 0x01, 0x59); // Ensure RESET
 				pdi_key(pdi, 0x1289AB45CDD888FFull);
 
@@ -44,14 +48,19 @@ public:
 					success = pdi_read(pdi, pdi_status, clock, process);
 				}
 
+				uint8_t err = !success? 1: (pdi_status & 0x02)  == 0? 3: 0;
+				if (err != 0)
+					pdi.clear();
+
 				com.write(0x80);
 				com.write(0x11);
-				com.write(!success? 1: (pdi_status & 0x02)  == 0? 3: 0);
+				com.write(err);
 			}
 			break;
 		case 2: // Leave programming mode
 
 			// Clear the RESET register first
+			// TODO: is this necessary?
 			pdi_stcs(pdi, 0x01, 0x00);
 
 			pdi.clear();

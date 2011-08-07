@@ -2,6 +2,7 @@
 #define SHUPITO_HANDLER_AVRICSP_HPP
 
 #include "handler_base.hpp"
+#include "avrlib/stopwatch.hpp"
 #include <avr/io.h>
 
 template <typename Spi, typename Com, typename Clock, typename ResetPin>
@@ -42,15 +43,14 @@ public:
 			}
 
 			// Pull down the reset line and send "Programming enable" sequence
-			ResetPin::set(false);
-			ResetPin::output(true);
+			ResetPin::make_low();
 			wait(clock, 1000);
 
-			ResetPin::set(true);
+			ResetPin::set_value(true);
 			for (uint8_t i = 0; i < 3; ++i)
 			{
 				wait(clock, 1000);
-				ResetPin::set(false);
+				ResetPin::set_value(false);
 
 				// There has to be a 20ms delay on atmega128
 				wait(clock, 20);
@@ -66,8 +66,11 @@ public:
 					break;
 				}
 
-				ResetPin::set(true);
+				ResetPin::set_value(true);
 			}
+
+			if (!m_programming_enabled)
+				spi.clear();
 
 			com.write(0x80);
 			com.write(0x11);
@@ -266,86 +269,6 @@ public:
 				com.write(!success);
 			}
 			break;
-#if 0
-		case 5:
-			// Read EEPROM memory
-			if (cmd_parser.size() > 2)
-			{
-				uint16_t address = (cmd_parser[0] << 8) | cmd_parser[1];
-				uint8_t size = cmd_parser[2] & 0x3f;
-				com.write(0x80);
-				com.write(0xf5);
-				com.write(size);
-				for (; size != 0; --size)
-				{
-					spi(0xA0);
-					spi((address >> 8) & 0x03);
-					spi(address);
-					com.write(spi(0));
-					++address;
-				}
-				com.write(0);
-			}
-			break;
-		case 9:
-			// Write fuses
-			if (cmd_parser.size() >= 4)
-			{
-				static uint8_t const commands[][3] =
-				{
-					{ 0xAC, 0xE0, 0x00 },
-					{ 0xAC, 0xA0, 0x00 },
-					{ 0xAC, 0xA8, 0x00 },
-					{ 0xAC, 0xA4, 0x00 },
-				};
-				
-				for (uint8_t i = 0; i < 4; ++i)
-				{
-					spi(commands[i][0]);
-					spi(commands[i][1]);
-					spi(commands[i][2]);
-					spi(cmd_parser[i]);
-					flash_wait(cmd_parser.size() > 4 && (cmd_parser[4] & (1<<0)), 5);
-				}
-				com.write(0x80);
-				com.write(0x91);
-				com.write(0x00);
-			}
-			break;
-		case 10:
-			// Set remote clock and enable/disable the clock output
-			if (cmd_parser.size() >= 2)
-			{
-				remote_clock_khz = cmd_parser[0] | (cmd_parser[1] << 8);
-				com.write(0x80);
-				com.write(0xa1);
-				com.write(0x00);
-			}
-
-			if (cmd_parser.size() >= 3)
-			{
-				switch (cmd_parser[2])
-				{
-				case 0:
-					// Disable
-					TCCR0B = 0;
-					DDRD &= ~(1<<6);
-					PORTD &= ~(1<<6);
-					break;
-				case 1:
-					// Enable
-					// TODO: match the speed according to remote_clock_khz
-					// Currently generates 1MHz clock
-					OCR0A = 7;
-					TCCR0A = (1<<COM0A0)|(1<<WGM01)|(1<<WGM00);
-					TCCR0B = (1<<WGM02)|(1<<CS00);
-					DDRD |= (1<<6);
-					PORTD |= (1<<6);
-					break;
-				}
-			}
-			break;
-#endif
 		}
 	}
 
