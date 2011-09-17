@@ -1,17 +1,24 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include "../fw_common/avrlib/command_parser.hpp"
-#include "../fw_common/avrlib/usart_xd1.hpp"
 #include "../fw_common/avrlib/async_usart.hpp"
+#include "../fw_common/avrlib/bootseq.hpp"
+#include "../fw_common/avrlib/uart_xmega.hpp"
 #include "../fw_common/avrlib/counter.hpp"
 #include "../fw_common/avrlib/format.hpp"
 
 #include "../fw_common/handler_avricsp.hpp"
 #include "../fw_common/handler_xmega.hpp"
 
-typedef avrlib::async_usart<avrlib::usart_xd1, 64, 64> com_t;
-com_t com(38400, true);
-ISR(USARTD1_RXC_vect) { com.process_rx(); }
+typedef avrlib::async_usart<avrlib::uart_xmega, 64, 64> com_nested_t;
+com_nested_t com_inner;
+ISR(USARTD1_RXC_vect) { com_inner.process_rx(); }
+
+com_nested_t com_outer;
+ISR(USARTE0_RXC_vect) { com_outer.process_rx(); }
+
+typedef com_nested_t com_t;
+com_t & com = com_outer;
 
 struct timer_xd0
 {
@@ -299,8 +306,9 @@ ISR(USARTC0_RXC_vect) { pdi.intr_rxc(); }
 
 void process()
 {
-	pdi.process();
-	com.process_tx();
+	//pdi.process();
+	com_inner.process_tx();
+	com_outer.process_tx();
 }
 
 void send_dword(uint32_t v)
@@ -311,8 +319,18 @@ void send_dword(uint32_t v)
 	com.write(v >> 24);
 }
 
+static uint8_t const device_descriptor[] PROGMEM = {
+	0x09, 0x3d, 0x7f, 0x32, 0xcd, 0xc6, 0x49, 0x28, 0x95, 0x5d, 0x51, 0x3d, 0x17, 0xa8, 0x53, 0x58,
+	0x02, 0x82, 0x00, 0x46, 0xdb, 0xc8, 0x65, 0xb4, 0xd0, 0x46, 0x6b, 0x9b, 0x70, 0x2f, 0x3f, 0x5b,
+	0x26, 0x4e, 0x65, 0x08, 0x00, 0x71, 0xef, 0xb9, 0x03, 0x30, 0x30, 0x4f, 0xd3, 0x88, 0x96, 0x19,
+	0x46, 0xab, 0xa3, 0x7e, 0xfc, 0x08, 0x00, 0x35, 0x6e, 0x9b, 0xf7, 0x87, 0x18, 0x49, 0x65, 0x94,
+	0xa4, 0x0b, 0xe3, 0x70, 0xc8, 0x79, 0x7c, 0x01, 0xf4, 0x5f,
+};
+
 int main()
 {
+	PORTD.DIRSET = (1<<3);
+
 	// Run at 32MHz
 	OSC.CTRL = OSC_RC32MEN_bm | OSC_RC2MEN_bm;
 	while ((OSC.STATUS & OSC_RC32MRDY_bm) == 0)
@@ -325,106 +343,120 @@ int main()
 	PMIC.CTRL = PMIC_HILVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_LOLVLEN_bm;
 	sei();
 
-	TCD0.INTCTRLA = TC_OVFINTLVL_HI_gc;
-	TCD0.CTRLA = TC_CLKSEL_DIV8_gc;
+	PORTD.PIN6CTRL = PORT_OPC_PULLUP_gc;
+	PORTD.OUTSET = (1<<7);
+	PORTD.DIRSET = (1<<7);
 
-	pin_buf_txd::init();
+	PORTE.PIN2CTRL = PORT_OPC_PULLUP_gc;
+	PORTE.OUTSET = (1<<3);
+	PORTE.DIRSET = (1<<3);
+
+	com_inner.usart().open(USARTD1, true);
+	com_outer.usart().open(USARTE0, true);
+
+	/*TCD0.INTCTRLA = TC_OVFINTLVL_HI_gc;
+	TCD0.CTRLA = TC_CLKSEL_DIV8_gc;*/
+
+	/*pin_buf_txd::init();
 	pin_buf_rst::init();
-	pin_buf_pdi::init();
+	pin_buf_pdi::init();*/
 
+	avrlib::bootseq bootseq;
 	avrlib::command_parser cp;
 	cp.clear();
 
-	handler_xmega<my_pdi_t, com_t, clock_t> hxmega(pdi, com, clock);
+	/*handler_xmega<my_pdi_t, com_t, clock_t> hxmega(pdi, com, clock);
 	handler_avricsp<spi_t, com_t, clock_t, pin_buf_rst> havricsp(spi, com, clock);
-	handler_base * handler = 0;
+	handler_base * handler = 0;*/
 
 	for (;;)
 	{
+		if (!com_inner.empty())
+		{
+			com.write(com_inner.read());
+		}
+
 		if (!com.empty())
 		{
 			uint8_t ch = cp.push_data(com.read());
+			bootseq.check(ch);
 
 			switch (ch)
 			{
 			case 0:
-				if (cp.size() == 0 || cp[0] == 0)
-				{
-					// Send out the identification
-					com.write(0x80);
-					com.write(0x05);
-					com.write(0x40);
-					com.write(0xbd);
-					com.write(0xe9);
-					com.write(0x9f);
-					com.write(0xea);
-				}
-				else
-				{
-					switch (cp[0])
-					{
-					case 1: // Get slot count
-						com.write(0x80);
-						com.write(0x02);
-						com.write(0x41);
-						com.write(0x01);
-						break;
-					case 2: // List functions available for on the current slot.
-						com.write(0x80);
-						com.write(0x09);
-						com.write(0x42);
-						send_dword(0x871e0846/*avr*/);
-						send_dword(0xc2a4dd67/*avrx*/);
-						break;
-					case 3: // Select a function into the current slot
-						if (cp.size() > 1)
-						{
-							handler_base * new_handler = 0;
-							uint8_t err = 0;
-							switch (cp[1])
-							{
-							case 1:
-								new_handler = &havricsp;
-								break;
-							case 2:
-								new_handler = &hxmega;
-								break;
-							case 0:
-								break;
-							default:
-								err = 1;
-							}
+				if (cp.size() == 0)
+					break;
 
-							if (!err && handler != new_handler)
-							{
-								if (handler)
-									handler->unselect();
-								if (new_handler)
-									err = new_handler->select();
-								handler = (err == 0? new_handler: 0);
-							}
+				switch (cp[0])
+				{
+				case 0:
+					// Send the device descriptor
+					com.write(0x80);
+					com.write(0x0f);
+					com.write(sizeof device_descriptor);
+					for (uint8_t i = 0; i != sizeof device_descriptor; ++i)
+						com.write(pgm_read_byte(device_descriptor + i));
+					break;
+				}
+				break;
+			case 9:
+				if (cp.size() == 0)
+					break;
+
+				if (cp[0] == 0 && cp.size() > 1)
+				{
+					switch (cp[1])
+					{
+					case 0:
+						// Send the set of available pipes
+						com.write(0x80);
+						com.write(0x93);
+						com.write(0x00);
+						com.write(0x01);
+						com.write('u');
+						break;
+					case 1:
+						// Activate a pipe
+						if (cp.size() == 3 && cp[2] == 'u')
+						{
 							com.write(0x80);
+							com.write(0x93);
+							com.write(0x01);
+							com.write(0x01);
+							com.write('u');
+						}
+						else
+						{
+							com.write(0x80);
+							com.write(0x91);
 							com.write(0x02);
-							com.write(0x43);
-							com.write(err);
 						}
 						break;
-					case 4: // Get selected function.
+					case 2:
+						// Deactivate a pipe
+						if (cp.size() == 3 && cp[2] == 1)
 						{
-							uint32_t res = 0;
-							if (handler == &havricsp)
-								res = 0x871e0846;
-							if (handler == &hxmega)
-								res = 0xc2a4dd67;
-
 							com.write(0x80);
-							com.write(0x05);
-							com.write(0x44);
-							send_dword(res);
+							com.write(0x92);
+							com.write(0x02);
+							com.write(0x01);
+						}
+						else
+						{
+							com.write(0x80);
+							com.write(0x91);
+							com.write(0x02);
 						}
 						break;
 					}
 				}
+
+				if (cp[0] == 1)
+				{
+					for (uint8_t i = 1; i < cp.size(); ++i)
+						com_inner.write(cp[i]);
+				}
+				
 				break;
 			case '?':
 				avrlib::send(com, "Shupito v2.0\n");
@@ -435,8 +467,8 @@ int main()
 			default:
 				if (ch > 16)
 					cp.clear();
-				else if (handler)
-					handler->handle_command(cp);
+				/*else if (handler)
+					handler->handle_command(cp);*/
 			}
 		}
 
