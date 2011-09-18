@@ -361,6 +361,8 @@ int main()
 	pin_buf_rst::init();
 	pin_buf_pdi::init();*/
 
+	bool inner_redirected = false;
+
 	avrlib::bootseq bootseq;
 	avrlib::command_parser cp;
 	cp.clear();
@@ -371,9 +373,22 @@ int main()
 
 	for (;;)
 	{
-		if (!com_inner.empty())
+		if (!inner_redirected && !com_inner.empty())
 		{
-			com.write(com_inner.read());
+			com_inner.read();
+		}
+
+		if (inner_redirected && !com_inner.empty())
+		{
+			uint8_t size = com_inner.read_size();
+			if (size > 13)
+				size = 13;
+
+			com_outer.write(0x80);
+			com_outer.write(0x90 | (size + 1));
+			com_outer.write(0x01);
+			for (uint8_t i = 0; i < size; ++i)
+				com_outer.write(com_inner.read());
 		}
 
 		if (!com.empty())
@@ -424,6 +439,7 @@ int main()
 							com.write(0x01);
 							com.write(0x01);
 							com.write('u');
+							inner_redirected = true;
 						}
 						else
 						{
@@ -440,6 +456,7 @@ int main()
 							com.write(0x92);
 							com.write(0x02);
 							com.write(0x01);
+							inner_redirected = false;
 						}
 						else
 						{
