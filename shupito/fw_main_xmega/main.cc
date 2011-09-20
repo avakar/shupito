@@ -320,11 +320,14 @@ void send_dword(uint32_t v)
 }
 
 static uint8_t const device_descriptor[] PROGMEM = {
-	0x09, 0x3d, 0x7f, 0x32, 0xcd, 0xc6, 0x49, 0x28, 0x95, 0x5d, 0x51, 0x3d, 0x17, 0xa8, 0x53, 0x58,
-	0x02, 0x82, 0x00, 0x46, 0xdb, 0xc8, 0x65, 0xb4, 0xd0, 0x46, 0x6b, 0x9b, 0x70, 0x2f, 0x3f, 0x5b,
-	0x26, 0x4e, 0x65, 0x08, 0x00, 0x71, 0xef, 0xb9, 0x03, 0x30, 0x30, 0x4f, 0xd3, 0x88, 0x96, 0x19,
-	0x46, 0xab, 0xa3, 0x7e, 0xfc, 0x08, 0x00, 0x35, 0x6e, 0x9b, 0xf7, 0x87, 0x18, 0x49, 0x65, 0x94,
-	0xa4, 0x0b, 0xe3, 0x70, 0xc8, 0x79, 0x7c, 0x01, 0xf4, 0x5f,
+	0x01, 0x09, 0x3d, 0x7f, 0x32, 0xcd, 0xc6, 0x49, 0x28, 0x95, 0x5d, 0x51, 0x3d, 0x17, 0xa8, 0x53,
+	0x58, 0x04, 0x82, 0x00, 0x00, 0x46, 0xdb, 0xc8, 0x65, 0xb4, 0xd0, 0x46, 0x6b, 0x9b, 0x70, 0x2f,
+	0x3f, 0x5b, 0x26, 0x4e, 0x65, 0x01, 0x08, 0x00, 0x00, 0x71, 0xef, 0xb9, 0x03, 0x30, 0x30, 0x4f,
+	0xd3, 0x88, 0x96, 0x19, 0x46, 0xab, 0xa3, 0x7e, 0xfc, 0x01, 0x08, 0x00, 0x03, 0x35, 0x6e, 0x9b,
+	0xf7, 0x87, 0x18, 0x49, 0x65, 0x94, 0xa4, 0x0b, 0xe3, 0x70, 0xc8, 0x79, 0x7c, 0x09, 0x01, 0x00,
+	0x03, 0x1d, 0x47, 0x38, 0xa0, 0xfc, 0x34, 0x4f, 0x71, 0xaa, 0x73, 0x57, 0x88, 0x1b, 0x27, 0x8c,
+	0xb1, 0x0a, 0x01, 0x00, 0x03, 0x0f, 0x75, 0xb6, 0x2c, 0xe9, 0xad, 0x48, 0x40, 0xac, 0x43, 0xeb,
+	0x28, 0xb1, 0x2c, 0xb0, 0x80, 0x0b, 0x01, 0xa7, 0x74,
 };
 
 int main()
@@ -354,12 +357,12 @@ int main()
 	com_inner.usart().open(USARTD1, true);
 	com_outer.usart().open(USARTE0, true);
 
-	/*TCD0.INTCTRLA = TC_OVFINTLVL_HI_gc;
-	TCD0.CTRLA = TC_CLKSEL_DIV8_gc;*/
+	TCD0.INTCTRLA = TC_OVFINTLVL_HI_gc;
+	TCD0.CTRLA = TC_CLKSEL_DIV8_gc;
 
-	/*pin_buf_txd::init();
+	pin_buf_txd::init();
 	pin_buf_rst::init();
-	pin_buf_pdi::init();*/
+	pin_buf_pdi::init();
 
 	bool inner_redirected = false;
 
@@ -367,9 +370,11 @@ int main()
 	avrlib::command_parser cp;
 	cp.clear();
 
-	/*handler_xmega<my_pdi_t, com_t, clock_t> hxmega(pdi, com, clock);
+	uint16_t vdd_voltage = 42;
+
+	handler_xmega<my_pdi_t, com_t, clock_t> hxmega(pdi, com, clock);
 	handler_avricsp<spi_t, com_t, clock_t, pin_buf_rst> havricsp(spi, com, clock);
-	handler_base * handler = 0;*/
+	handler_base * handler = 0;
 
 	for (;;)
 	{
@@ -405,12 +410,78 @@ int main()
 				switch (cp[0])
 				{
 				case 0:
-					// Send the device descriptor
-					com.write(0x80);
-					com.write(0x0f);
-					com.write(sizeof device_descriptor);
-					for (uint8_t i = 0; i != sizeof device_descriptor; ++i)
-						com.write(pgm_read_byte(device_descriptor + i));
+					{
+						// Send the device descriptor
+						uint8_t const * PROGMEM ptr = device_descriptor;
+						uint8_t size = sizeof device_descriptor;
+
+						for (;;)
+						{
+							uint8_t chunk = 15;
+							if (size < chunk)
+								chunk = (uint8_t)size;
+							size -= chunk;
+
+							com.write(0x80);
+							com.write(chunk);
+							if (!chunk)
+								break;
+
+							for (; chunk != 0; --chunk)
+								com.write(pgm_read_byte(ptr++));
+						}
+					}
+					break;
+				case 1:
+					// Enable interface
+					{
+						uint8_t err = 1;
+						if (cp.size() == 3 && cp[1] == 1)
+						{
+							handler_base * new_handler = 0;
+							err = 0;
+
+							switch (cp[2])
+							{
+							case 0:
+								new_handler = 0;
+								break;
+							case 1:
+								new_handler = &havricsp;
+								break;
+							case 2:
+								new_handler = &hxmega;
+								break;
+							default:
+								err = 1;
+							}
+
+							if (!err && new_handler != handler)
+							{
+								handler->unselect();
+								err = new_handler->select();
+								handler = (err == 0? new_handler: 0);
+							}
+						}
+						com.write(0x80);
+						com.write(0x01);
+						com.write(err);
+					}
+					break;
+				case 2:
+					// Disable interface
+					{
+						if (cp.size() == 3 && cp[1] == 1)
+						{
+							if (handler)
+								handler->unselect();
+							handler = 0;
+						}
+
+						com.write(0x80);
+						com.write(0x01);
+						com.write(0x00);
+					}
 					break;
 				}
 				break;
@@ -475,6 +546,15 @@ int main()
 				}
 				
 				break;
+			case 10:
+				if (cp.size() > 0 && cp[0] == 1)
+				{
+					com.write(0x80);
+					com.write(0xa2);
+					com.write((uint8_t)vdd_voltage);
+					com.write((uint8_t)(vdd_voltage >> 8));
+				}
+				break;
 			case '?':
 				avrlib::send(com, "Shupito v2.0\n");
 				cp.clear();
@@ -484,8 +564,8 @@ int main()
 			default:
 				if (ch > 16)
 					cp.clear();
-				/*else if (handler)
-					handler->handle_command(cp);*/
+				else if (handler)
+					handler->handle_command(cp);
 			}
 		}
 
