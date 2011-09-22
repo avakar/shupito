@@ -580,7 +580,7 @@ int main()
 				break;
 			case 0xa:
 				if (cp.size() == 2 && cp[0] == 1)
-					pin_ext_sup::set_value(cp[1] == 0);
+					pin_ext_sup::set_value(cp[1] == 1);
 				break;
 			case '?':
 				avrlib::send(com, "Shupito v2.0\n");
