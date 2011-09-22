@@ -45,9 +45,11 @@ ISR(TCD0_OVF_vect)
 		static void make_high() { port.OUTSET = (1<<(pin)); port.DIRSET = (1<<(pin)); } \
 		static void make_low() { port.OUTCLR = (1<<(pin)); port.DIRSET = (1<<(pin)); } \
 		static void set_value(uint8_t value) { if (value) port.OUTSET = (1<<(pin)); else port.OUTCLR = (1<<(pin)); } \
+		static void toggle() { port.OUTTGL = (1<<(pin)); } \
 	}
 
 AVRLIB_MAKE_XMEGA_PIN(pin_ext_sup, PORTB, 2);
+AVRLIB_MAKE_XMEGA_PIN(pin_led,     PORTD, 3);
 
 AVRLIB_MAKE_XMEGA_PIN(pin_pdid, PORTB, 3);
 AVRLIB_MAKE_XMEGA_PIN(pin_rstd, PORTC, 0);
@@ -320,14 +322,7 @@ void send_dword(uint32_t v)
 }
 
 static uint8_t const device_descriptor[] PROGMEM = {
-	0x01, 0x09, 0x3d, 0x7f, 0x32, 0xcd, 0xc6, 0x49, 0x28, 0x95, 0x5d, 0x51, 0x3d, 0x17, 0xa8, 0x53,
-	0x58, 0x04, 0x82, 0x00, 0x00, 0x46, 0xdb, 0xc8, 0x65, 0xb4, 0xd0, 0x46, 0x6b, 0x9b, 0x70, 0x2f,
-	0x3f, 0x5b, 0x26, 0x4e, 0x65, 0x01, 0x08, 0x00, 0x00, 0x71, 0xef, 0xb9, 0x03, 0x30, 0x30, 0x4f,
-	0xd3, 0x88, 0x96, 0x19, 0x46, 0xab, 0xa3, 0x7e, 0xfc, 0x01, 0x08, 0x00, 0x03, 0x35, 0x6e, 0x9b,
-	0xf7, 0x87, 0x18, 0x49, 0x65, 0x94, 0xa4, 0x0b, 0xe3, 0x70, 0xc8, 0x79, 0x7c, 0x09, 0x01, 0x00,
-	0x03, 0x1d, 0x47, 0x38, 0xa0, 0xfc, 0x34, 0x4f, 0x71, 0xaa, 0x73, 0x57, 0x88, 0x1b, 0x27, 0x8c,
-	0xb1, 0x0a, 0x01, 0x00, 0x03, 0x0f, 0x75, 0xb6, 0x2c, 0xe9, 0xad, 0x48, 0x40, 0xac, 0x43, 0xeb,
-	0x28, 0xb1, 0x2c, 0xb0, 0x80, 0x0b, 0x01, 0xa7, 0x74,
+#include "desc.h"
 };
 
 int main()
@@ -364,20 +359,47 @@ int main()
 	pin_buf_rst::init();
 	pin_buf_pdi::init();
 
+	pin_led::make_low();
+	pin_ext_sup::make_low();
+
 	bool inner_redirected = false;
 
 	avrlib::bootseq bootseq;
 	avrlib::command_parser cp;
 	cp.clear();
 
-	uint16_t vdd_voltage = 42;
+	// Prepare the ADC
+	ADCA.CH0.CTRL = ADC_CH_INPUTMODE_SINGLEENDED_gc;
+	ADCA.CH0.MUXCTRL = ADC_CH_MUXPOS_PIN6_gc;
+	ADCA.PRESCALER = ADC_PRESCALER_DIV16_gc;
+	ADCA.REFCTRL = ADC_REFSEL_INT1V_gc;
+	ADCA.CTRLB = ADC_RESOLUTION_8BIT_gc;
+	ADCA.CTRLA = ADC_ENABLE_bm;
 
 	handler_xmega<my_pdi_t, com_t, clock_t> hxmega(pdi, com, clock);
 	handler_avricsp<spi_t, com_t, clock_t, pin_buf_rst> havricsp(spi, com, clock);
 	handler_base * handler = 0;
 
+	avrlib::timeout<clock_t> vdd_timeout(clock, 4000000);
+	vdd_timeout.cancel();
+
 	for (;;)
 	{
+		if (vdd_timeout)
+		{
+			vdd_timeout.ack();
+			ADCA.CH0.CTRL |= ADC_CH_START_bm;
+		}
+
+		if (ADCA.CH0.INTFLAGS & ADC_CH_CHIF_bm)
+		{
+			ADCA.CH0.INTFLAGS = ADC_CH_CHIF_bm;
+			com.write(0x80);
+			com.write(0xa2);
+			com.write(0x01);
+			com.write(ADCA.CH0RESL);
+		}
+
 		if (!inner_redirected && !com_inner.empty())
 		{
 			com_inner.read();
@@ -424,11 +446,11 @@ int main()
 
 							com.write(0x80);
 							com.write(chunk);
-							if (!chunk)
-								break;
-
-							for (; chunk != 0; --chunk)
+							for (uint8_t i = chunk; i != 0; --i)
 								com.write(pgm_read_byte(ptr++));
+
+							if (chunk < 15)
+								break;
 						}
 					}
 					break;
@@ -436,7 +458,7 @@ int main()
 					// Enable interface
 					{
 						uint8_t err = 1;
-						if (cp.size() == 3 && cp[1] == 1)
+						if (cp.size() == 3 && cp[1] == 0)
 						{
 							handler_base * new_handler = 0;
 							err = 0;
@@ -463,6 +485,12 @@ int main()
 								handler = (err == 0? new_handler: 0);
 							}
 						}
+
+						if (cp.size() == 2 && cp[1] == 2)
+						{
+							vdd_timeout.start();
+							err = 0;
+						}
 						com.write(0x80);
 						com.write(0x01);
 						com.write(err);
@@ -471,13 +499,17 @@ int main()
 				case 2:
 					// Disable interface
 					{
-						if (cp.size() == 3 && cp[1] == 1)
+						if (cp.size() == 3 && cp[1] == 0)
 						{
 							if (handler)
 								handler->unselect();
 							handler = 0;
 						}
 
+						if (cp.size() == 2 && cp[1] == 2)
+						{
+							vdd_timeout.cancel();
+						}
 						com.write(0x80);
 						com.write(0x01);
 						com.write(0x00);
@@ -546,17 +578,40 @@ int main()
 				}
 				
 				break;
-			case 10:
-				if (cp.size() > 0 && cp[0] == 1)
-				{
-					com.write(0x80);
-					com.write(0xa2);
-					com.write((uint8_t)vdd_voltage);
-					com.write((uint8_t)(vdd_voltage >> 8));
-				}
+			case 0xa:
+				if (cp.size() == 2 && cp[0] == 1)
+					pin_ext_sup::set_value(cp[1] == 0);
 				break;
 			case '?':
 				avrlib::send(com, "Shupito v2.0\n");
+				cp.clear();
+				break;
+			case 'l':
+				pin_led::set_value(true);
+				cp.clear();
+				break;
+			case 'L':
+				pin_led::set_value(false);
+				cp.clear();
+				break;
+			case 'e':
+				pin_ext_sup::set_value(true);
+				cp.clear();
+				break;
+			case 'E':
+				pin_ext_sup::set_value(false);
+				cp.clear();
+				break;
+			case 't':
+				avrlib::format(com, "clock: %x\n") % clock.value();
+				cp.clear();
+				break;
+			case 'm':
+				vdd_timeout.start();
+				cp.clear();
+				break;
+			case 'M':
+				vdd_timeout.cancel();
 				cp.clear();
 				break;
 			case 255:
