@@ -17,6 +17,9 @@ ISR(USARTD1_RXC_vect) { com_inner.process_rx(); }
 com_nested_t com_outer;
 ISR(USARTE0_RXC_vect) { com_outer.process_rx(); }
 
+com_nested_t com_app;
+ISR(USARTC1_RXC_vect) { com_app.process_rx(); }
+
 typedef com_nested_t com_t;
 com_t & com = com_outer;
 
@@ -325,65 +328,55 @@ static uint8_t const device_descriptor[] PROGMEM = {
 #include "desc.h"
 };
 
-int main()
+class context_t
 {
-	PORTD.DIRSET = (1<<3);
-
-	// Run at 32MHz
-	OSC.CTRL = OSC_RC32MEN_bm | OSC_RC2MEN_bm;
-	while ((OSC.STATUS & OSC_RC32MRDY_bm) == 0)
+public:
+	context_t()
+		: hxmega(pdi, com, clock), havricsp(spi, com, clock),
+		vdd_timeout(clock, 4000000)
 	{
 	}
 
-	CCP = CCP_IOREG_gc;
-	CLK.CTRL = CLK_SCLKSEL_RC32M_gc;
+	void init()
+	{
+		PORTD.PIN6CTRL = PORT_OPC_PULLUP_gc;
+		PORTD.OUTSET = (1<<7);
+		PORTD.DIRSET = (1<<7);
 
-	PMIC.CTRL = PMIC_HILVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_LOLVLEN_bm;
-	sei();
+		PORTE.PIN2CTRL = PORT_OPC_PULLUP_gc;
+		PORTE.OUTSET = (1<<3);
+		PORTE.DIRSET = (1<<3);
 
-	PORTD.PIN6CTRL = PORT_OPC_PULLUP_gc;
-	PORTD.OUTSET = (1<<7);
-	PORTD.DIRSET = (1<<7);
+		com_inner.usart().open(USARTD1, true);
+		com_outer.usart().open(USARTE0, true);
 
-	PORTE.PIN2CTRL = PORT_OPC_PULLUP_gc;
-	PORTE.OUTSET = (1<<3);
-	PORTE.DIRSET = (1<<3);
+		TCD0.INTCTRLA = TC_OVFINTLVL_HI_gc;
+		TCD0.CTRLA = TC_CLKSEL_DIV8_gc;
 
-	com_inner.usart().open(USARTD1, true);
-	com_outer.usart().open(USARTE0, true);
+		pin_buf_txd::init();
+		pin_buf_rst::init();
+		pin_buf_pdi::init();
 
-	TCD0.INTCTRLA = TC_OVFINTLVL_HI_gc;
-	TCD0.CTRLA = TC_CLKSEL_DIV8_gc;
+		pin_led::make_low();
+		pin_ext_sup::make_low();
 
-	pin_buf_txd::init();
-	pin_buf_rst::init();
-	pin_buf_pdi::init();
+		inner_redirected = false;
 
-	pin_led::make_low();
-	pin_ext_sup::make_low();
+		cp.clear();
 
-	bool inner_redirected = false;
+		// Prepare the ADC
+		ADCA.CH0.CTRL = ADC_CH_INPUTMODE_SINGLEENDED_gc;
+		ADCA.CH0.MUXCTRL = ADC_CH_MUXPOS_PIN6_gc;
+		ADCA.PRESCALER = ADC_PRESCALER_DIV16_gc;
+		ADCA.REFCTRL = ADC_REFSEL_INT1V_gc;
+		ADCA.CTRLB = ADC_RESOLUTION_8BIT_gc;
+		ADCA.CTRLA = ADC_ENABLE_bm;
 
-	avrlib::bootseq bootseq;
-	avrlib::command_parser cp;
-	cp.clear();
+		handler = 0;
+		vdd_timeout.cancel();
+	}
 
-	// Prepare the ADC
-	ADCA.CH0.CTRL = ADC_CH_INPUTMODE_SINGLEENDED_gc;
-	ADCA.CH0.MUXCTRL = ADC_CH_MUXPOS_PIN6_gc;
-	ADCA.PRESCALER = ADC_PRESCALER_DIV16_gc;
-	ADCA.REFCTRL = ADC_REFSEL_INT1V_gc;
-	ADCA.CTRLB = ADC_RESOLUTION_8BIT_gc;
-	ADCA.CTRLA = ADC_ENABLE_bm;
-
-	handler_xmega<my_pdi_t, com_t, clock_t> hxmega(pdi, com, clock);
-	handler_avricsp<spi_t, com_t, clock_t, pin_buf_rst> havricsp(spi, com, clock);
-	handler_base * handler = 0;
-
-	avrlib::timeout<clock_t> vdd_timeout(clock, 4000000);
-	vdd_timeout.cancel();
-
-	for (;;)
+	void run()
 	{
 		if (vdd_timeout)
 		{
@@ -458,31 +451,17 @@ int main()
 					// Enable interface
 					{
 						uint8_t err = 1;
+
 						if (cp.size() == 3 && cp[1] == 0)
 						{
-							handler_base * new_handler = 0;
-							err = 0;
-
 							switch (cp[2])
 							{
 							case 0:
-								new_handler = 0;
+								err = this->select_handler(handler_spi);
 								break;
 							case 1:
-								new_handler = &havricsp;
+								err = this->select_handler(handler_pdi);
 								break;
-							case 2:
-								new_handler = &hxmega;
-								break;
-							default:
-								err = 1;
-							}
-
-							if (!err && new_handler != handler)
-							{
-								handler->unselect();
-								err = new_handler->select();
-								handler = (err == 0? new_handler: 0);
 							}
 						}
 
@@ -491,6 +470,7 @@ int main()
 							vdd_timeout.start();
 							err = 0;
 						}
+
 						com.write(0x80);
 						com.write(0x01);
 						com.write(err);
@@ -501,15 +481,14 @@ int main()
 					{
 						if (cp.size() == 3 && cp[1] == 0)
 						{
-							if (handler)
-								handler->unselect();
-							handler = 0;
+							this->select_handler(handler_none);
 						}
 
 						if (cp.size() == 2 && cp[1] == 2)
 						{
 							vdd_timeout.cancel();
 						}
+
 						com.write(0x80);
 						com.write(0x01);
 						com.write(0x00);
@@ -625,5 +604,71 @@ int main()
 		}
 
 		process();
+	}
+
+private:
+	enum handler_t { handler_none, handler_spi, handler_pdi };
+	uint8_t select_handler(handler_t h)
+	{
+		handler_base * new_handler = 0;
+		switch (h)
+		{
+		case handler_spi:
+			new_handler = &havricsp;
+			break;
+		case handler_pdi:
+			new_handler = &hxmega;
+			break;
+		}
+
+		uint8_t err = 0;
+
+		if (new_handler != handler)
+		{
+			if (handler)
+				handler->unselect();
+			if (new_handler)
+				err = new_handler->select();
+			handler = (err == 0? new_handler: 0);
+		}
+
+		return err;
+	}
+
+private:
+	bool inner_redirected;
+
+	avrlib::bootseq bootseq;
+	avrlib::command_parser cp;
+
+	handler_xmega<my_pdi_t, com_t, clock_t> hxmega;
+	handler_avricsp<spi_t, com_t, clock_t, pin_buf_rst> havricsp;
+	handler_base * handler;
+
+	avrlib::timeout<clock_t> vdd_timeout;
+};
+
+context_t ctx;
+
+int main()
+{
+	PORTD.DIRSET = (1<<3);
+
+	// Run at 32MHz
+	OSC.CTRL = OSC_RC32MEN_bm | OSC_RC2MEN_bm;
+	while ((OSC.STATUS & OSC_RC32MRDY_bm) == 0)
+	{
+	}
+
+	CCP = CCP_IOREG_gc;
+	CLK.CTRL = CLK_SCLKSEL_RC32M_gc;
+
+	PMIC.CTRL = PMIC_HILVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_LOLVLEN_bm;
+	sei();
+
+	ctx.init();
+	for (;;)
+	{
+		ctx.run();
 	}
 }
