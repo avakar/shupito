@@ -341,13 +341,13 @@ public:
 	{
 		PORTD.PIN6CTRL = PORT_OPC_PULLUP_gc;
 		PORTD.OUTSET = (1<<7);
-		PORTD.DIRSET = (1<<7);
+		PORTD.OUTCLR = (1<<5);
+		PORTD.DIRSET = (1<<5)|(1<<7);
+		com_inner.usart().open(USARTD1, true, true /*synchronous*/);
 
 		PORTE.PIN2CTRL = PORT_OPC_PULLUP_gc;
 		PORTE.OUTSET = (1<<3);
 		PORTE.DIRSET = (1<<3);
-
-		com_inner.usart().open(USARTD1, true);
 		com_outer.usart().open(USARTE0, true);
 
 		TCD0.INTCTRLA = TC_OVFINTLVL_HI_gc;
