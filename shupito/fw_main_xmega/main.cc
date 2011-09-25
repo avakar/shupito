@@ -313,6 +313,7 @@ void process()
 	//pdi.process();
 	com_inner.process_tx();
 	com_outer.process_tx();
+	com_app.process_tx();
 }
 
 static uint8_t const device_descriptor[] PROGMEM = {
@@ -324,7 +325,7 @@ class context_t
 public:
 	context_t()
 		: hxmega(pdi, clock), havricsp(spi, clock),
-		vdd_timeout(clock, 4000000), m_primary_com(0), m_vdd_com(0)
+		vdd_timeout(clock, 4000000), m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_comm_allowed(true)
 	{
 	}
 
@@ -396,9 +397,22 @@ public:
 
 			com_outer.write(0x80);
 			com_outer.write(0x90 | (size + 1));
-			com_outer.write(0x01);
+			com_outer.write(0x02);
 			for (uint8_t i = 0; i < size; ++i)
 				com_outer.write(com_inner.read());
+		}
+
+		if (!com_app.empty() && m_app_com)
+		{
+			uint8_t size = com_app.read_size();
+			if (size > 14)
+				size = 14;
+
+			m_app_com->write(0x80);
+			m_app_com->write(0x90 | (size + 1));
+			m_app_com->write(0x01);
+			for (uint8_t i = 0; i < size; ++i)
+				m_app_com->write(com_app.read());
 		}
 
 		if (!com_outer.empty())
@@ -408,7 +422,7 @@ public:
 			{
 				bootseq.check(ch);
 				if (!this->process_command(cp_outer, com_outer)
-					&& !process_outer_tunnel(cp_outer, com_outer))
+					&& !process_tunnel(cp_outer, com_outer, false))
 				{
 					cp_outer.clear();
 				}
@@ -421,7 +435,7 @@ public:
 			if (ch != 255)
 			{
 				if (!this->process_command(cp_inner, com_inner)
-					&& !process_inner_tunnel(cp_inner, com_inner))
+					&& !process_tunnel(cp_inner, com_inner, true))
 				{
 					cp_inner.clear();
 				}
@@ -432,7 +446,7 @@ public:
 	}
 
 private:
-	bool process_inner_tunnel(avrlib::command_parser & cp, com_t & com)
+	bool process_tunnel(avrlib::command_parser & cp, com_t & com, bool inner)
 	{
 		switch (cp.command())
 		{
@@ -444,68 +458,60 @@ private:
 				case 0:
 					// Send the set of available pipes
 					com.write(0x80);
-					com.write(0x91);
+					com.write(0x95);
 					com.write(0x00);
-					break;
-				case 1:
-				case 2:
-					com.write(0x80);
-					com.write(0x91);
-					com.write(0x02);
-					break;
-				}
-			}
-
-			return true;
-		}
-
-		return false;
-	}
-
-	bool process_outer_tunnel(avrlib::command_parser & cp, com_t & com)
-	{
-		switch (cp.command())
-		{
-		case 9:
-			if (cp.size() > 1 && cp[0] == 0)
-			{
-				switch (cp[1])
-				{
-				case 0:
-					// Send the set of available pipes
-					com.write(0x80);
-					com.write(0x93);
-					com.write(0x00);
-					com.write(0x01);
-					com.write('u');
+					com.write(0x03);
+					com.write('a');
+					com.write('p');
+					com.write('p');
 					break;
 				case 1:
 					// Activate a pipe
-					if (cp.size() == 3 && cp[2] == 'u')
+					if (!inner && cp.size() == 5 && cp[2] == 'u' && cp[3] == 's' && cp[4] == 'b')
 					{
 						com.write(0x80);
-						com.write(0x93);
+						com.write(0x92);
 						com.write(0x01);
-						com.write(0x01);
-						com.write('u');
+						com.write(0x02);
 						inner_redirected = true;
+					}
+					else if (cp.size() == 5 && cp[2] == 'a' && cp[3] == 'p' && cp[4] == 'p' && m_app_comm_allowed)
+					{
+						com.write(0x80);
+						com.write(0x92);
+						com.write(0x01);
+						com.write(0x01);
+						m_app_com = &com;
+						pin_buf_txd::make_high();
+						com_app.usart().open(USARTC1, true);
 					}
 					else
 					{
 						com.write(0x80);
-						com.write(0x91);
-						com.write(0x02);
+						com.write(0x92);
+						com.write(0x01);
+						com.write(0x00);
 					}
 					break;
 				case 2:
 					// Deactivate a pipe
-					if (cp.size() == 3 && cp[2] == 1)
+					if (!inner && cp.size() == 3 && cp[2] == 2)
+					{
+						com.write(0x80);
+						com.write(0x92);
+						com.write(0x02);
+						com.write(0x02);
+						inner_redirected = false;
+					}
+					else if (cp.size() == 3 && cp[2] == 1)
 					{
 						com.write(0x80);
 						com.write(0x92);
 						com.write(0x02);
 						com.write(0x01);
-						inner_redirected = false;
+						com_app.usart().close();
+						pin_buf_txd::make_input();
+						m_app_com = 0;
 					}
 					else
 					{
@@ -517,10 +523,16 @@ private:
 				}
 			}
 
-			if (cp[0] == 1)
+			if (!inner && inner_redirected && cp[0] == 2)
 			{
 				for (uint8_t i = 1; i < cp.size(); ++i)
 					com_inner.write(cp[i]);
+			}
+
+			if (m_app_com && cp[0] == 1)
+			{
+				for (uint8_t i = 1; i < cp.size(); ++i)
+					com_app.write(cp[i]);
 			}
 
 			return true;
@@ -708,6 +720,9 @@ private:
 
 	com_t * m_primary_com;
 	com_t * m_vdd_com;
+	com_t * m_app_com;
+
+	bool m_app_comm_allowed;
 };
 
 context_t ctx;
