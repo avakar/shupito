@@ -85,7 +85,7 @@ public:
 		{
 			UDINT = ~(1<<EORSTI);
 			configure_ep0();
-			send(com, "RESET\r\n");
+			//send(com, "RESET\r\n");
 		}
 
 		UENUM = 0;
@@ -219,7 +219,7 @@ private:
 			break;
 
 		case 0x20: // SET_LINE_CODING
-			send(com, "set_line_coding setup\r\n");
+			//send(com, "set_line_coding setup\r\n");
 			break;
 		
 		case 0x22: // SET_CONTROL_LINE_STATE
@@ -227,7 +227,7 @@ private:
 			break;
 
 		default:
-			format(com, "SETUP %x:%x %x:%x %x\r\n") % bmRequestType % bRequest % wValue % wIndex % wLength;
+			//format(com, "SETUP %x:%x %x:%x %x\r\n") % bmRequestType % bRequest % wValue % wIndex % wLength;
 			UECONX = (1<<STALLRQ)|(1<<EPEN);
 			m_ep0_transaction.m_request = 0xff;
 		}
@@ -235,7 +235,7 @@ private:
 
 	void ep0_out()
 	{
-		send(com, "out\r\n");
+		//send(com, "out\r\n");
 		switch (m_ep0_transaction.m_request)
 		{
 		case 0x20: // SET_LINE_CODING
@@ -244,7 +244,7 @@ private:
 				dte_rate |= uint32_t(UEDATX) << 8;
 				dte_rate |= uint32_t(UEDATX) << 16;
 				dte_rate |= uint32_t(UEDATX) << 24;
-				format(com, "set_line_conding %x\r\n") % dte_rate;
+				//format(com, "set_line_conding %x\r\n") % dte_rate;
 			}
 			UEINTX = ~(1<<RXOUTI);
 
@@ -293,7 +293,7 @@ private:
 
 	void set_config()
 	{
-		send(com, "set_config\r\n");
+		//send(com, "set_config\r\n");
 
 		UERST = (1<<1)|(1<<3)|(1<<4);
 		UERST = 0;
