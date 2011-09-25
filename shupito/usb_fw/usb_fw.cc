@@ -3,17 +3,20 @@
 
 #include <avr/pgmspace.h>
 
-#include "avrlib/async_usart.hpp"
-#include "avrlib/usart1.hpp"
-#include "avrlib/format.hpp"
+#include "../fw_common/avrlib/async_usart.hpp"
+#include "../fw_common/avrlib/usart1.hpp"
+#include "../fw_common/avrlib/format.hpp"
+#include "../fw_common/avrlib/bootseq.hpp"
+#include "../fw_common/avrlib/counter.hpp"
+#include "../fw_common/avrlib/timer1.hpp"
 
 typedef avrlib::async_usart<avrlib::usart1, 64, 64, avrlib::bootseq> com_t;
-com_t com(38400, true);
+com_t com;
+ISR(USART1_RX_vect) { com.process_rx(); }
 
-ISR(USART1_RX_vect)
-{
-	com.process_rx();
-}
+typedef avrlib::counter<avrlib::timer1> clock_t;
+clock_t clock;
+ISR(TIMER1_OVF_vect) { clock.tov_interrupt(); }
 
 #define EPTYPE_CONTROL 0
 #define EPTYPE_ISOCHRONOUS 1
@@ -56,7 +59,7 @@ public:
 		USBCON |= (1<<USBE);
 
 		// Initialize PLL and wait for it to become locked
-		PLLCSR = (1<<PLLP0)|(1<<PLLE);
+		PLLCSR = (1<<PLLE);
 		while ((PLLCSR & (1<<PLOCK)) == 0)
 		{
 		}
@@ -135,7 +138,7 @@ public:
 			UEINTX = ~(1<<RXOUTI);
 			while (UEBCLX)
 				com.write(UEDATX);
-			UEINTX = ~(1<<FIFOCON);
+			UEINTX = (uint8_t)~(1<<FIFOCON);
 		}
 
 		UENUM = 4;
@@ -144,7 +147,7 @@ public:
 			UEINTX = ~(1<<TXINI);
 			while (!m_in.empty() && (UEINTX & (1<<RWAL)) != 0)
 				UEDATX = m_in.read();
-			UEINTX = ~(1<<FIFOCON);
+			UEINTX = (uint8_t)~(1<<FIFOCON);
 		}
 	}
 
@@ -333,18 +336,16 @@ private:
 
 int main()
 {
-	// Make the clock run at 8MHz. This is for a 16MHz crystal;
-	// remove this when the crystal is changed for 8MHz one.
-	CLKPR = (1<<CLKPCE);
-	CLKPR = (1<<CLKPS0);
-
 	REGCR = (1<<REGDIS);
 
 	sei();
 
+	clock.enable(avrlib::timer_fosc_8);
+
+	com.usart().open_sync_slave(true);
+
 	usb_t<com_t> usb(com);
 	usb.init();
-
 
 	for (;;)
 	{
@@ -353,6 +354,18 @@ int main()
 			char ch = com.read();
 			switch (ch)
 			{
+			case 't':
+				avrlib::format(com, "clock: %x\n") % clock.value();
+				break;
+			case 'x':
+				avrlib::format(com,
+					"CLKSEL0: %x\n"
+					"CLKSEL1: %x\n"
+					"CLKSTA: %x\n"
+					"CLKPR: %x\n"
+					"PLLCSR: %x\n"
+					) % CLKSEL0 % CLKSEL1 % CLKSTA % CLKPR % PLLCSR;
+				break;
 			case '?':
 			default:
 				{
