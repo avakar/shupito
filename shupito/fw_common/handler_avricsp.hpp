@@ -7,15 +7,15 @@
 
 template <typename Spi, typename Com, typename Clock, typename ResetPin>
 class handler_avricsp
-	: public handler_base
+	: public handler_base<Com>
 {
 public:
 	typedef Spi spi_t;
 	typedef Com com_t;
 	typedef Clock clock_t;
 
-	handler_avricsp(spi_t & spi, com_t & com, clock_t & clock)
-		: spi(spi), com(com), clock(clock), m_programming_enabled(false)
+	handler_avricsp(spi_t & spi, clock_t & clock)
+		: spi(spi), clock(clock), m_programming_enabled(false)
 	{
 	}
 
@@ -24,7 +24,7 @@ public:
 		spi.clear();
 	}
 
-	void handle_command(avrlib::command_parser & cp)
+	bool handle_command(avrlib::command_parser & cp, com_t & com)
 	{
 		switch (cp.command())
 		{
@@ -269,12 +269,15 @@ public:
 				com.write(!success);
 			}
 			break;
+		default:
+			return false;
 		}
+
+		return true;
 	}
 
 private:
 	spi_t & spi;
-	com_t & com;
 	clock_t & clock;
 
 	bool m_programming_enabled;

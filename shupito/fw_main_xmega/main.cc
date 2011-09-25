@@ -21,7 +21,6 @@ com_nested_t com_app;
 ISR(USARTC1_RXC_vect) { com_app.process_rx(); }
 
 typedef com_nested_t com_t;
-com_t & com = com_outer;
 
 struct timer_xd0
 {
@@ -316,14 +315,6 @@ void process()
 	com_outer.process_tx();
 }
 
-void send_dword(uint32_t v)
-{
-	com.write(v);
-	com.write(v >> 8);
-	com.write(v >> 16);
-	com.write(v >> 24);
-}
-
 static uint8_t const device_descriptor[] PROGMEM = {
 #include "desc.h"
 };
@@ -332,8 +323,8 @@ class context_t
 {
 public:
 	context_t()
-		: hxmega(pdi, com, clock), havricsp(spi, com, clock),
-		vdd_timeout(clock, 4000000)
+		: hxmega(pdi, clock), havricsp(spi, clock),
+		vdd_timeout(clock, 4000000), m_primary_com(0), m_vdd_com(0)
 	{
 	}
 
@@ -362,7 +353,8 @@ public:
 
 		inner_redirected = false;
 
-		cp.clear();
+		cp_outer.clear();
+		cp_inner.clear();
 
 		// Prepare the ADC
 		ADCA.CH0.CTRL = ADC_CH_INPUTMODE_SINGLEENDED_gc;
@@ -387,22 +379,20 @@ public:
 		if (ADCA.CH0.INTFLAGS & ADC_CH_CHIF_bm)
 		{
 			ADCA.CH0.INTFLAGS = ADC_CH_CHIF_bm;
-			com.write(0x80);
-			com.write(0xa2);
-			com.write(0x01);
-			com.write(ADCA.CH0RESL);
-		}
-
-		if (!inner_redirected && !com_inner.empty())
-		{
-			com_inner.read();
+			if (m_vdd_com)
+			{
+				m_vdd_com->write(0x80);
+				m_vdd_com->write(0xa2);
+				m_vdd_com->write(0x01);
+				m_vdd_com->write(ADCA.CH0RESL);
+			}
 		}
 
 		if (inner_redirected && !com_inner.empty())
 		{
 			uint8_t size = com_inner.read_size();
-			if (size > 13)
-				size = 13;
+			if (size > 14)
+				size = 14;
 
 			com_outer.write(0x80);
 			com_outer.write(0x90 | (size + 1));
@@ -411,195 +401,30 @@ public:
 				com_outer.write(com_inner.read());
 		}
 
-		if (!com.empty())
+		if (!com_outer.empty())
 		{
-			uint8_t ch = cp.push_data(com.read());
-			bootseq.check(ch);
-
-			switch (ch)
+			uint8_t ch = cp_outer.push_data(com_outer.read());
+			if (ch != 255)
 			{
-			case 0:
-				if (cp.size() == 0)
-					break;
-
-				switch (cp[0])
+				bootseq.check(ch);
+				if (!this->process_command(cp_outer, com_outer)
+					&& !process_outer_tunnel(cp_outer, com_outer))
 				{
-				case 0:
-					{
-						// Send the device descriptor
-						uint8_t const * PROGMEM ptr = device_descriptor;
-						uint8_t size = sizeof device_descriptor;
-
-						for (;;)
-						{
-							uint8_t chunk = 15;
-							if (size < chunk)
-								chunk = (uint8_t)size;
-							size -= chunk;
-
-							com.write(0x80);
-							com.write(chunk);
-							for (uint8_t i = chunk; i != 0; --i)
-								com.write(pgm_read_byte(ptr++));
-
-							if (chunk < 15)
-								break;
-						}
-					}
-					break;
-				case 1:
-					// Enable interface
-					{
-						uint8_t err = 1;
-
-						if (cp.size() == 3 && cp[1] == 0)
-						{
-							switch (cp[2])
-							{
-							case 0:
-								err = this->select_handler(handler_spi);
-								break;
-							case 1:
-								err = this->select_handler(handler_pdi);
-								break;
-							}
-						}
-
-						if (cp.size() == 2 && cp[1] == 2)
-						{
-							vdd_timeout.start();
-							err = 0;
-						}
-
-						com.write(0x80);
-						com.write(0x01);
-						com.write(err);
-					}
-					break;
-				case 2:
-					// Disable interface
-					{
-						if (cp.size() == 3 && cp[1] == 0)
-						{
-							this->select_handler(handler_none);
-						}
-
-						if (cp.size() == 2 && cp[1] == 2)
-						{
-							vdd_timeout.cancel();
-						}
-
-						com.write(0x80);
-						com.write(0x01);
-						com.write(0x00);
-					}
-					break;
+					cp_outer.clear();
 				}
-				break;
-			case 9:
-				if (cp.size() == 0)
-					break;
+			}
+		}
 
-				if (cp[0] == 0 && cp.size() > 1)
+		if (!inner_redirected && !com_inner.empty())
+		{
+			uint8_t ch = cp_inner.push_data(com_inner.read());
+			if (ch != 255)
+			{
+				if (!this->process_command(cp_inner, com_inner)
+					&& !process_inner_tunnel(cp_inner, com_inner))
 				{
-					switch (cp[1])
-					{
-					case 0:
-						// Send the set of available pipes
-						com.write(0x80);
-						com.write(0x93);
-						com.write(0x00);
-						com.write(0x01);
-						com.write('u');
-						break;
-					case 1:
-						// Activate a pipe
-						if (cp.size() == 3 && cp[2] == 'u')
-						{
-							com.write(0x80);
-							com.write(0x93);
-							com.write(0x01);
-							com.write(0x01);
-							com.write('u');
-							inner_redirected = true;
-						}
-						else
-						{
-							com.write(0x80);
-							com.write(0x91);
-							com.write(0x02);
-						}
-						break;
-					case 2:
-						// Deactivate a pipe
-						if (cp.size() == 3 && cp[2] == 1)
-						{
-							com.write(0x80);
-							com.write(0x92);
-							com.write(0x02);
-							com.write(0x01);
-							inner_redirected = false;
-						}
-						else
-						{
-							com.write(0x80);
-							com.write(0x91);
-							com.write(0x02);
-						}
-						break;
-					}
+					cp_inner.clear();
 				}
-
-				if (cp[0] == 1)
-				{
-					for (uint8_t i = 1; i < cp.size(); ++i)
-						com_inner.write(cp[i]);
-				}
-				
-				break;
-			case 0xa:
-				if (cp.size() == 2 && cp[0] == 1)
-					pin_ext_sup::set_value(cp[1] == 1);
-				break;
-			case '?':
-				avrlib::send(com, "Shupito v2.0\n");
-				cp.clear();
-				break;
-			case 'l':
-				pin_led::set_value(true);
-				cp.clear();
-				break;
-			case 'L':
-				pin_led::set_value(false);
-				cp.clear();
-				break;
-			case 'e':
-				pin_ext_sup::set_value(true);
-				cp.clear();
-				break;
-			case 'E':
-				pin_ext_sup::set_value(false);
-				cp.clear();
-				break;
-			case 't':
-				avrlib::format(com, "clock: %x\n") % clock.value();
-				cp.clear();
-				break;
-			case 'm':
-				vdd_timeout.start();
-				cp.clear();
-				break;
-			case 'M':
-				vdd_timeout.cancel();
-				cp.clear();
-				break;
-			case 255:
-				break;
-			default:
-				if (ch > 16)
-					cp.clear();
-				else if (handler)
-					handler->handle_command(cp);
 			}
 		}
 
@@ -607,10 +432,242 @@ public:
 	}
 
 private:
+	bool process_inner_tunnel(avrlib::command_parser & cp, com_t & com)
+	{
+		switch (cp.command())
+		{
+		case 9:
+			if (cp.size() > 1 && cp[0] == 0)
+			{
+				switch (cp[1])
+				{
+				case 0:
+					// Send the set of available pipes
+					com.write(0x80);
+					com.write(0x91);
+					com.write(0x00);
+					break;
+				case 1:
+				case 2:
+					com.write(0x80);
+					com.write(0x91);
+					com.write(0x02);
+					break;
+				}
+			}
+
+			return true;
+		}
+
+		return false;
+	}
+
+	bool process_outer_tunnel(avrlib::command_parser & cp, com_t & com)
+	{
+		switch (cp.command())
+		{
+		case 9:
+			if (cp.size() > 1 && cp[0] == 0)
+			{
+				switch (cp[1])
+				{
+				case 0:
+					// Send the set of available pipes
+					com.write(0x80);
+					com.write(0x93);
+					com.write(0x00);
+					com.write(0x01);
+					com.write('u');
+					break;
+				case 1:
+					// Activate a pipe
+					if (cp.size() == 3 && cp[2] == 'u')
+					{
+						com.write(0x80);
+						com.write(0x93);
+						com.write(0x01);
+						com.write(0x01);
+						com.write('u');
+						inner_redirected = true;
+					}
+					else
+					{
+						com.write(0x80);
+						com.write(0x91);
+						com.write(0x02);
+					}
+					break;
+				case 2:
+					// Deactivate a pipe
+					if (cp.size() == 3 && cp[2] == 1)
+					{
+						com.write(0x80);
+						com.write(0x92);
+						com.write(0x02);
+						com.write(0x01);
+						inner_redirected = false;
+					}
+					else
+					{
+						com.write(0x80);
+						com.write(0x91);
+						com.write(0x02);
+					}
+					break;
+				}
+			}
+
+			if (cp[0] == 1)
+			{
+				for (uint8_t i = 1; i < cp.size(); ++i)
+					com_inner.write(cp[i]);
+			}
+
+			return true;
+		}
+
+		return false;
+	}
+
+	bool process_command(avrlib::command_parser & cp, com_t & com)
+	{
+		switch (cp.command())
+		{
+		case 0:
+			if (cp.size() == 0)
+				return true;
+
+			switch (cp[0])
+			{
+			case 0:
+				{
+					// Send the device descriptor
+					uint8_t const * PROGMEM ptr = device_descriptor;
+					uint8_t size = sizeof device_descriptor;
+
+					for (;;)
+					{
+						uint8_t chunk = 15;
+						if (size < chunk)
+							chunk = (uint8_t)size;
+						size -= chunk;
+
+						com.write(0x80);
+						com.write(chunk);
+						for (uint8_t i = chunk; i != 0; --i)
+							com.write(pgm_read_byte(ptr++));
+
+						if (chunk < 15)
+							break;
+					}
+				}
+				break;
+			case 1:
+				// Enable interface
+				{
+					uint8_t err = 1;
+
+					if (cp.size() == 3 && cp[1] == 0)
+					{
+						switch (cp[2])
+						{
+						case 0:
+							err = this->select_handler(handler_spi);
+							break;
+						case 1:
+							err = this->select_handler(handler_pdi);
+							break;
+						}
+
+						if (err == 0)
+							m_primary_com = &com;
+					}
+
+					if (cp.size() == 2 && cp[1] == 2)
+					{
+						vdd_timeout.start();
+						err = 0;
+						m_vdd_com = &com;
+					}
+
+					com.write(0x80);
+					com.write(0x01);
+					com.write(err);
+				}
+				break;
+			case 2:
+				// Disable interface
+				{
+					if (cp.size() == 3 && cp[1] == 0)
+					{
+						this->select_handler(handler_none);
+						m_primary_com = 0;
+					}
+
+					if (cp.size() == 2 && cp[1] == 2)
+					{
+						vdd_timeout.cancel();
+						m_vdd_com = 0;
+					}
+
+					com.write(0x80);
+					com.write(0x01);
+					com.write(0x00);
+				}
+				break;
+			}
+
+			return true;
+		case 0xa:
+			if (cp.size() == 2 && cp[0] == 1)
+				pin_ext_sup::set_value(cp[1] == 1);
+			return true;
+		case '?':
+			avrlib::send(com, "Shupito v2.0\n");
+			cp.clear();
+			return true;
+		case 'l':
+			pin_led::set_value(true);
+			cp.clear();
+			return true;
+		case 'L':
+			pin_led::set_value(false);
+			cp.clear();
+			return true;
+		case 'e':
+			pin_ext_sup::set_value(true);
+			cp.clear();
+			return true;
+		case 'E':
+			pin_ext_sup::set_value(false);
+			cp.clear();
+			return true;
+		case 't':
+			avrlib::format(com, "clock: %x\n") % clock.value();
+			cp.clear();
+			return true;
+		case 'm':
+			vdd_timeout.start();
+			cp.clear();
+			return true;
+		case 'M':
+			vdd_timeout.cancel();
+			cp.clear();
+			return true;
+		case 255:
+			break;
+		default:
+			if (&com == m_primary_com && handler)
+				return handler->handle_command(cp, com);
+		}
+
+		return false;
+	}
+
 	enum handler_t { handler_none, handler_spi, handler_pdi };
 	uint8_t select_handler(handler_t h)
 	{
-		handler_base * new_handler = 0;
+		handler_base<com_t> * new_handler;
 		switch (h)
 		{
 		case handler_spi:
@@ -619,6 +676,8 @@ private:
 		case handler_pdi:
 			new_handler = &hxmega;
 			break;
+		default:
+			new_handler = 0;
 		}
 
 		uint8_t err = 0;
@@ -639,13 +698,16 @@ private:
 	bool inner_redirected;
 
 	avrlib::bootseq bootseq;
-	avrlib::command_parser cp;
+	avrlib::command_parser cp_outer, cp_inner;
 
 	handler_xmega<my_pdi_t, com_t, clock_t> hxmega;
 	handler_avricsp<spi_t, com_t, clock_t, pin_buf_rst> havricsp;
-	handler_base * handler;
+	handler_base<com_t> * handler;
 
 	avrlib::timeout<clock_t> vdd_timeout;
+
+	com_t * m_primary_com;
+	com_t * m_vdd_com;
 };
 
 context_t ctx;

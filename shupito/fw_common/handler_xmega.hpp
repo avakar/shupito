@@ -6,15 +6,15 @@
 
 template <typename Pdi, typename Com, typename Clock>
 class handler_xmega
-	: public handler_base
+	: public handler_base<Com>
 {
 public:
 	typedef Pdi pdi_t;
-	typedef Com com_t;
 	typedef Clock clock_t;
+	typedef Com com_t;
 
-	handler_xmega(pdi_t & pdi, com_t & com, clock_t & clock)
-		: pdi(pdi), com(com), clock(clock), m_fuse_address(0)
+	handler_xmega(pdi_t & pdi, clock_t & clock)
+		: pdi(pdi), clock(clock), m_fuse_address(0)
 	{
 	}
 
@@ -23,7 +23,7 @@ public:
 		pdi.clear();
 	}
 
-	void handle_command(avrlib::command_parser & cp)
+	bool handle_command(avrlib::command_parser & cp, com_t & com)
 	{
 		switch (cp.command())
 		{
@@ -266,14 +266,18 @@ public:
 				com.write(!success);
 			}
 			break;
+
+		default:
+			return false;
 		}
+
+		return true;
 	}
 
 private:
 	static void process() {}
 
 	pdi_t & pdi;
-	com_t & com;
 	clock_t & clock;
 
 	uint8_t m_fuse_address;
