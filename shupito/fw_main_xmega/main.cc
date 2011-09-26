@@ -53,13 +53,13 @@ ISR(TCD0_OVF_vect)
 AVRLIB_MAKE_XMEGA_PIN(pin_ext_sup, PORTB, 2);
 AVRLIB_MAKE_XMEGA_PIN(pin_led,     PORTD, 3);
 
-AVRLIB_MAKE_XMEGA_PIN(pin_pdid, PORTB, 3);
-AVRLIB_MAKE_XMEGA_PIN(pin_rstd, PORTC, 0);
+AVRLIB_MAKE_XMEGA_PIN(pin_pdid, PORTD, 1);
+AVRLIB_MAKE_XMEGA_PIN(pin_rstd, PORTD, 0);
 AVRLIB_MAKE_XMEGA_PIN(pin_rst,  PORTC, 1);
 AVRLIB_MAKE_XMEGA_PIN(pin_pdi,  PORTC, 5);
 AVRLIB_MAKE_XMEGA_PIN(pin_rxd,  PORTC, 6);
 AVRLIB_MAKE_XMEGA_PIN(pin_txd,  PORTC, 7);
-AVRLIB_MAKE_XMEGA_PIN(pin_txdd, PORTD, 0);
+AVRLIB_MAKE_XMEGA_PIN(pin_txdd, PORTD, 2);
 
 AVRLIB_MAKE_XMEGA_PIN(pin_usb_rx, PORTD, 6);
 AVRLIB_MAKE_XMEGA_PIN(pin_usb_tx, PORTD, 7);
@@ -70,7 +70,7 @@ struct pin_buffer_with_oe
 	static void init()
 	{
 		ValuePin::make_input();
-		OePin::make_high();
+		OePin::make_low();
 	}
 
 	static void clear()
@@ -82,18 +82,18 @@ struct pin_buffer_with_oe
 	static void make_input()
 	{
 		ValuePin::make_input();
-		OePin::set_value(1);
+		OePin::set_value(0);
 	}
 
 	static void make_high()
 	{
-		OePin::set_value(0);
+		OePin::set_value(1);
 		ValuePin::make_high();
 	}
 
 	static void make_low()
 	{
-		OePin::set_value(0);
+		OePin::set_value(1);
 		ValuePin::make_low();
 	}
 
