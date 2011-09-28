@@ -325,8 +325,10 @@ class context_t
 public:
 	context_t()
 		: hxmega(pdi, clock), havricsp(spi, clock),
-		vdd_timeout(clock, 4000000), m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_comm_allowed(true)
+		vdd_timeout(clock, 4000000), usb_test_timeout(clock, 4000000),
+		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_comm_allowed(true)
 	{
+		usb_test_timeout.cancel();
 	}
 
 	void init()
@@ -440,6 +442,13 @@ public:
 					cp_inner.clear();
 				}
 			}
+		}
+
+		if (usb_test_timeout)
+		{
+			usb_test_timeout.ack();
+			if (!inner_redirected)
+				avrlib::send(com_inner, "A really long string that we need to get through USB unmangled.\n");
 		}
 
 		process();
@@ -658,6 +667,14 @@ private:
 			avrlib::format(com, "clock: %x\n") % clock.value();
 			cp.clear();
 			return true;
+		case 'u':
+			usb_test_timeout.restart();
+			cp.clear();
+			return true;
+		case 'U':
+			usb_test_timeout.cancel();
+			cp.clear();
+			return true;
 		case 'm':
 			vdd_timeout.start();
 			cp.clear();
@@ -670,7 +687,10 @@ private:
 			break;
 		default:
 			if (&com == m_primary_com && handler)
-				return handler->handle_command(cp, com);
+			{
+				if (!handler->handle_command(cp, com))
+					cp.clear();
+			}
 		}
 
 		return false;
@@ -717,6 +737,7 @@ private:
 	handler_base<com_t> * handler;
 
 	avrlib::timeout<clock_t> vdd_timeout;
+	avrlib::timeout<clock_t> usb_test_timeout;
 
 	com_t * m_primary_com;
 	com_t * m_vdd_com;
