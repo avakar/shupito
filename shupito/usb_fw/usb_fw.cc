@@ -49,7 +49,8 @@ class usb_t
 {
 public:
 	explicit usb_t(InStream & in)
-		: m_in(in), m_resets(0), m_sofs(0), m_enabled(false), last_intr(0), last_i1(0), last_i2(0xcc)
+		: m_in(in), m_resets(0), m_sofs(0), m_enabled(false), last_intr(0), last_i1(0), last_i2(0xcc),
+		m_out_packet_pending(false)
 	{
 		m_ep0_transaction.m_request = 0xff;
 	}
@@ -131,14 +132,24 @@ public:
 
 		UENUM = 3;
 
-		UEINTX = ~((1<<NAKOUTI)|(1<<TXINI));
+		UEINTX = ~(1<<NAKOUTI);
 		
-		if (UEINTX & (1<<RXOUTI))
+		if (!m_out_packet_pending && (UEINTX & (1<<RXOUTI)) != 0)
 		{
 			UEINTX = ~(1<<RXOUTI);
-			while (UEBCLX)
+			m_out_packet_pending = true;
+		}
+
+		if (m_out_packet_pending)
+		{
+			while (com.tx_ready() && (UEINTX & (1<<RWAL)) != 0)
 				com.write(UEDATX);
-			UEINTX = (uint8_t)~(1<<FIFOCON);
+
+			if ((UEINTX & (1<<RWAL)) == 0)
+			{
+				UEINTX = (uint8_t)~(1<<FIFOCON);
+				m_out_packet_pending = false;
+			}
 		}
 
 		UENUM = 4;
@@ -158,6 +169,7 @@ public:
 private:
 	bool m_enabled;
 	uint8_t last_intr, last_i1, last_i2;
+	bool m_out_packet_pending;
 
 	void configure_ep0()
 	{
