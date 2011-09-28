@@ -144,10 +144,10 @@ public:
 		UENUM = 4;
 		if (!m_in.empty() && UEINTX & (1<<TXINI))
 		{
-			UEINTX = ~(1<<TXINI);
+			UEINTX = (uint8_t)~((1<<TXINI)|(1<<RXOUTI));
 			while (!m_in.empty() && (UEINTX & (1<<RWAL)) != 0)
 				UEDATX = m_in.read();
-			UEINTX = (uint8_t)~(1<<FIFOCON);
+			UEINTX = (uint8_t)~((1<<FIFOCON)|(1<<RXOUTI));
 		}
 	}
 
