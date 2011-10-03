@@ -117,6 +117,16 @@ typedef pin_buffer_with_oe<pin_rst, pin_rstd> pin_buf_rst;
 typedef pin_buffer_with_oe<pin_pdi, pin_pdid> pin_buf_pdi;
 typedef pin_rxd pin_buf_rxd;
 
+void avrlib::assertion_failed(char const * message, char const * file, int line)
+{	
+	cli();
+	pin_led::make_high();
+
+	for (;;)
+	{
+	}
+}
+
 class spi_t
 {
 public:
@@ -172,15 +182,15 @@ public:
 		while (m_state != st_idle)
 			this->process();
 
-		PdiClk::make_input();
-		PdiData::make_input();
+		PdiData::make_low();
+		PdiClk::make_low();
 
 		USARTC0.CTRLA = 0;
 		USARTC0.CTRLB = 0;
 		USARTC0.CTRLC = 0;
-		PORTC.PIN1CTRL = 0;
 	
-		m_state = st_disabled;
+		m_state = st_unrst;
+		m_time_base = m_clock.value();
 	}
 
 	void init()
@@ -190,9 +200,8 @@ public:
 
 		PORTC.PIN1CTRL = PORT_INVEN_bm;
 		PdiClk::make_high();
-		PdiData::make_high();
 
-		m_state = st_rst_disable;
+		m_state = st_rst;
 		m_time_base = m_clock.value();
 	}
 
@@ -219,6 +228,7 @@ public:
 		USARTC0.CTRLA = 0;
 		m_tx_buffer.push(data);
 		m_rx_count = rx_count;
+		m_state = st_busy;
 		USARTC0.CTRLA = USART_DREINTLVL_MED_gc;
 	}
 
@@ -259,6 +269,14 @@ public:
 		{
 		case st_disabled:
 			break;
+		case st_rst:
+			if (m_clock.value() - m_time_base >= 8) // FIXME: time constants
+			{
+				PdiData::make_high();
+				m_state = st_rst_disable;
+				m_time_base += 8;
+			}
+			break;
 		case st_rst_disable:
 			if (m_clock.value() - m_time_base >= 8) // FIXME: time constants
 			{
@@ -280,13 +298,18 @@ public:
 				m_rx_count = 0;
 			}
 			break;
-		case st_idle:
-			pin_led::make_low();
-			break;
-		case st_busy:
-			pin_led::make_high();
+		case st_unrst:
+			if (m_clock.value() - m_time_base >= 10000) // FIXME: time constants
+			{
+				PdiClk::make_input();
+				PdiData::make_input();
+				PORTC.PIN1CTRL = 0;
+				m_state = st_disabled;
+			}
 			break;
 		}
+
+		pin_led::set_value(m_state == st_busy);
 	}
 
 	void intr_rxc()
@@ -303,7 +326,7 @@ public:
 
 	void intr_udre()
 	{
-		//AVRLIB_ASSERT(!m_tx_buffer.empty());
+		AVRLIB_ASSERT(!m_tx_buffer.empty());
 
 		cli();
 		USARTC0.DATA = m_tx_buffer.top();
@@ -319,6 +342,8 @@ public:
 	
 	void intr_txc()
 	{
+		AVRLIB_ASSERT(m_tx_buffer.empty());
+
 		if (m_rx_count)
 		{
 			PdiData::make_input();
@@ -338,7 +363,7 @@ private:
 	avrlib::buffer<uint8_t, 16> m_tx_buffer;
 	volatile uint8_t m_rx_count;
 
-	enum { st_disabled, st_rst_disable, st_wait_ticks, st_idle, st_busy } volatile m_state;
+	enum { st_disabled, st_rst, st_rst_disable, st_wait_ticks, st_idle, st_busy, st_unrst } volatile m_state;
 };
 typedef pdi_t<clock_t, pin_buf_rst, pin_buf_pdi> my_pdi_t;
 my_pdi_t pdi(clock);

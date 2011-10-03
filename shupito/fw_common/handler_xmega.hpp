@@ -36,32 +36,41 @@ public:
 				while (!pdi.tx_ready())
 					process();
 
-				pdi_stcs(pdi, 0x01, 0x59); // Ensure RESET
-				pdi_key(pdi, 0x1289AB45CDD888FFull);
-
 				typename clock_t::time_type t = clock.value();
 
-				bool success = true;
-				while (success && (pdi_status & 0x02) == 0 && clock.value() - t < 1000000)
+				pdi_stcs(pdi, 0x01, 0x59); // Ensure RESET
+				pdi_ldcs(pdi, 1);
+
+				uint8_t reset = 0;
+				uint8_t error = pdi_read(pdi, reset, clock, process);
+				if (!error && (reset & 1) == 0)
+					error = 5;
+
+				if (!error)
+					pdi_key(pdi, 0x1289AB45CDD888FFull);
+
+				while (!error && (pdi_status & 0x02) == 0 && clock.value() - t < 100000)
 				{
 					pdi_ldcs(pdi, 0);
-					success = pdi_read(pdi, pdi_status, clock, process);
+					error = pdi_read(pdi, pdi_status, clock, process);
 				}
 
-				uint8_t err = !success? 1: (pdi_status & 0x02)  == 0? 3: 0;
-				if (err != 0)
+				if (!error && (pdi_status & 0x02) == 0)
+					error = 3;
+
+				if (error != 0)
 					pdi.clear();
 
 				com.write(0x80);
 				com.write(0x11);
-				com.write(err);
+				com.write(error);
 			}
 			break;
 		case 2: // Leave programming mode
 
 			// Clear the RESET register first
 			// TODO: is this necessary?
-			//pdi_stcs(pdi, 0x01, 0x00);
+			pdi_stcs(pdi, 0x01, 0x00);
 
 			pdi.clear();
 
@@ -78,29 +87,29 @@ public:
 				com.write(0x80);
 				com.write(0x34);
 
-				bool success = true;
+				uint8_t error = 0;
 				
 				for (uint8_t i = 0; i != 4; ++i)
 				{
 					uint8_t v = 0;
-					if (success)
-						success = pdi_read(pdi, v, clock, process);
+					if (!error)
+						error = pdi_read(pdi, v, clock, process);
 					com.write(v);
 				}
 
-				if (!success)
+				if (error)
 				{
 					pdi.clear();
 					com.write(0x80);
 					com.write(0x21);
-					com.write(1);
+					com.write(error);
 				}
 			}
 			break;
 		case 4: // READ 1'memid 4'addr 1'size
 			if (cp.size() == 6)
 			{
-				bool success = true;
+				uint8_t error = 0;
 
 				uint8_t memid = cp[0];
 				if (memid == 1)
@@ -117,7 +126,7 @@ public:
 					com.write(0xf4);
 					com.write(len);
 
-					success = pdi_ptrcopy(pdi, com, addr, len, clock, process);
+					error = pdi_ptrcopy(pdi, com, addr, len, clock, process);
 					com.write(0);
 				}
 				else if (memid == 3)
@@ -130,19 +139,19 @@ public:
 
 					com.write(0x80);
 					com.write(0x40 | len);
-					success = pdi_ptrcopy(pdi, com, 0x008F0020 | (cp[1] & 0x07), len, clock, process);
+					error = pdi_ptrcopy(pdi, com, 0x008F0020 | (cp[1] & 0x07), len, clock, process);
 				}
 				else
 				{
-					success = false;
+					error = 1;
 				}
 
-				if (!success)
+				if (error)
 				{
 					pdi.clear();
 					com.write(0x80);
 					com.write(0x21);
-					com.write(1);
+					com.write(error);
 				}
 			}
 			break;
@@ -154,10 +163,13 @@ public:
 				pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x40);
 				pdi_sts(pdi, (uint32_t)0x010001CB, (uint8_t)0x01);
 
-				bool success = pdi_wait_nvm_busy(pdi, clock, 50000, process);
+				uint8_t error = pdi_wait_nvm_busy(pdi, clock, 50000, process);
+				if (error)
+					pdi.clear();
+
 				com.write(0x80);
 				com.write(0x51);
-				com.write(!success);
+				com.write(error);
 			}
 			break;
 		case 6:
@@ -167,7 +179,7 @@ public:
 			{
 				uint8_t memid = cp[0];
 
-				bool success = true;
+				uint8_t error = 0;
 				if (memid == 1)
 				{
 					uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
@@ -177,7 +189,7 @@ public:
 					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x26);
 					pdi_sts(pdi, (uint32_t)0x010001CB, (uint8_t)0x01);
 
-					success = pdi_wait_nvm_busy(pdi, clock, 10000, process);
+					error = pdi_wait_nvm_busy(pdi, clock, 10000, process);
 
 					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x23);
 					pdi_st_ptr(pdi, addr);
@@ -189,12 +201,12 @@ public:
 				}
 				else
 				{
-					success = false;
+					error = 1;
 				}
 
 				com.write(0x80);
 				com.write(0x61);
-				com.write(!success);
+				com.write(error);
 			}
 			break;
 		case 7:
@@ -202,7 +214,7 @@ public:
 			// WFILL 1'memid (1'data)*
 			if (cp.size() >= 1)
 			{
-				bool success = true;
+				uint8_t error = 0;
 
 				uint8_t memid = cp[0];
 				if (memid == 1)
@@ -216,26 +228,26 @@ public:
 				}
 				else if (memid == 3)
 				{
-					for (uint8_t i = 1; success && i < cp.size(); ++i)
+					for (uint8_t i = 1; !error && i < cp.size(); ++i)
 					{
 						while (!pdi.tx_empty())
 							process();
 						pdi_sts(pdi, uint32_t(0x08F0020 | (m_fuse_address & 0x07)), cp[i]);
-						success = pdi_wait_nvm_busy(pdi, clock, 100000, process);
+						error = pdi_wait_nvm_busy(pdi, clock, 100000, process);
 						++m_fuse_address;
 					}
 				}
 
 				com.write(0x80);
 				com.write(0x71);
-				com.write(!success);
+				com.write(error);
 			}
 			break;
 		case 8:
 			// WRITE 1'memid 4'addr
 			if (cp.size() == 5)
 			{
-				bool success = true;
+				uint8_t error = 0;
 
 				uint8_t memid = cp[0];
 				uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
@@ -248,7 +260,7 @@ public:
 					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x2F);
 					pdi_sts(pdi, addr, (uint8_t)0);
 
-					success = pdi_wait_nvm_busy(pdi, clock, 10000, process);
+					error = pdi_wait_nvm_busy(pdi, clock, 50000, process);
 				}
 				else if (memid == 3)
 				{
@@ -258,12 +270,12 @@ public:
 				}
 				else
 				{
-					success = false;
+					error = 1;
 				}
 
 				com.write(0x80);
 				com.write(0x81);
-				com.write(!success);
+				com.write(error);
 			}
 			break;
 

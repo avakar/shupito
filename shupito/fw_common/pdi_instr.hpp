@@ -111,7 +111,7 @@ void pdi_ld_range(Pdi & pdi, T addr, U count)
 */
 
 template <typename R, typename Pdi, typename Clock, typename Process>
-bool pdi_read(Pdi & pdi, R & r, Clock & clock, Process const & process)
+uint8_t pdi_read(Pdi & pdi, R & r, Clock & clock, Process const & process)
 {
 	r = 0;
 
@@ -121,10 +121,9 @@ bool pdi_read(Pdi & pdi, R & r, Clock & clock, Process const & process)
 	{
 		while (!pdi.rx_ready())
 		{
-			if (clock.value() - t > 1000)
+			if (clock.value() - t > 4000)
 			{
-				pdi.cancel_read();
-				return false;
+				return 1;
 			}
 			process();
 		}
@@ -133,53 +132,39 @@ bool pdi_read(Pdi & pdi, R & r, Clock & clock, Process const & process)
 		r |= pdi.read();
 	}
 
-	return true;
+	return 0;
 }
 
 template <typename Pdi, typename Clock, typename Process>
-void pdi_read(Pdi & pdi, uint8_t *& buf, Clock & clock, Process const & process)
-{
-	if (!buf)
-		return;
-
-	typename Clock::time_type t = clock.value();
-
-	while (buf && !pdi.rx_ready())
-	{
-		if (buf && clock.value() - t > 1000)
-			buf = 0;
-		process();
-	}
-
-	*buf++ = pdi.read();
-}
-
-template <typename Pdi, typename Clock, typename Process>
-bool pdi_wait_nvm_busy(Pdi & pdi, Clock & clock, typename Clock::time_type timeout, Process const & process)
+uint8_t pdi_wait_nvm_busy(Pdi & pdi, Clock & clock, typename Clock::time_type timeout, Process const & process)
 {
 	typename Clock::time_type t = clock.value();
 
-	uint8_t status = 0x80;
-	bool success = true;
-	while (success && (status & 0x80) != 0 && clock.value() - t < timeout)
+	for (;;)
 	{
 		pdi_lds(pdi, (uint32_t)0x010001CF, 1);
-		success = pdi_read(pdi, status, clock, process);
-	}
 
-	return success && (status & 0x80) == 0;
+		uint8_t status;
+		uint8_t error = pdi_read(pdi, status, clock, process);
+		if (error)
+			return error;
+		if ((status & 0x80) == 0)
+			return 0;
+		if (clock.value() - t > timeout)
+			return 2;
+	}
 }
 
 
 template <typename Pdi, typename Com, typename Clock, typename Process>
-bool pdi_ptrcopy(Pdi & pdi, Com & com, uint32_t addr, uint8_t len, Clock & clock, Process const & process)
+uint8_t pdi_ptrcopy(Pdi & pdi, Com & com, uint32_t addr, uint8_t len, Clock & clock, Process const & process)
 {
-	bool success = true;
+	uint8_t error = 0;
 	while (len > 0)
 	{
 		uint8_t chunk = len > 14? 14: len;
 
-		if (success)
+		if (!error)
 		{
 			pdi_st_ptr(pdi, addr);
 			pdi_repeat(pdi, (uint8_t)(chunk - 1));
@@ -189,8 +174,8 @@ bool pdi_ptrcopy(Pdi & pdi, Com & com, uint32_t addr, uint8_t len, Clock & clock
 		for (uint8_t i = 0; i != chunk; ++i)
 		{
 			uint8_t v = 0;
-			if (success)
-				success = pdi_read(pdi, v, clock, process);
+			if (!error)
+				error = pdi_read(pdi, v, clock, process);
 			com.write(v);
 		}
 
@@ -198,7 +183,7 @@ bool pdi_ptrcopy(Pdi & pdi, Com & com, uint32_t addr, uint8_t len, Clock & clock
 		len -= chunk;
 	}
 
-	return success;
+	return error;
 }
 
 #endif
