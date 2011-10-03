@@ -25,9 +25,9 @@ typedef com_nested_t com_t;
 struct timer_xd0
 {
 	typedef uint16_t value_type;
-	static const uint8_t value_bits = 16;
-	static value_type value() { return TCD0.CNT; }
-	static void value(value_type v) { TCD0.CNT = v; }
+	static const uint8_t value_bits = 14;
+	static value_type value() { return TCD0.CNT >> 2; }
+	static void value(value_type v) { TCD0.CNT = v << 2; }
 	static bool overflow() { return (TCD0.INTFLAGS & TC0_OVFIF_bm) != 0; }
 	static void clear_overflow() { TCD0.INTFLAGS = TC0_OVFIF_bm; }
 	static void tov_interrupt(bool) {}
@@ -46,6 +46,7 @@ ISR(TCD0_OVF_vect)
 		static void make_input() { port.DIRCLR = (1<<(pin)); } \
 		static void make_high() { port.OUTSET = (1<<(pin)); port.DIRSET = (1<<(pin)); } \
 		static void make_low() { port.OUTCLR = (1<<(pin)); port.DIRSET = (1<<(pin)); } \
+		static void make_output() { port.DIRSET = (1<<(pin)); } \
 		static void set_value(uint8_t value) { if (value) port.OUTSET = (1<<(pin)); else port.OUTCLR = (1<<(pin)); } \
 		static void toggle() { port.OUTTGL = (1<<(pin)); } \
 	}
@@ -56,7 +57,9 @@ AVRLIB_MAKE_XMEGA_PIN(pin_led,     PORTD, 3);
 AVRLIB_MAKE_XMEGA_PIN(pin_pdid, PORTD, 1);
 AVRLIB_MAKE_XMEGA_PIN(pin_rstd, PORTD, 0);
 AVRLIB_MAKE_XMEGA_PIN(pin_rst,  PORTC, 1);
-AVRLIB_MAKE_XMEGA_PIN(pin_pdi,  PORTC, 5);
+
+AVRLIB_MAKE_XMEGA_PIN(pin_pdi,  PORTC, 3);
+
 AVRLIB_MAKE_XMEGA_PIN(pin_rxd,  PORTC, 6);
 AVRLIB_MAKE_XMEGA_PIN(pin_txd,  PORTC, 7);
 AVRLIB_MAKE_XMEGA_PIN(pin_txdd, PORTD, 2);
@@ -95,6 +98,12 @@ struct pin_buffer_with_oe
 	{
 		OePin::set_value(1);
 		ValuePin::make_low();
+	}
+
+	static void make_output()
+	{
+		OePin::set_value(1);
+		ValuePin::make_output();
 	}
 
 	static void set_value(uint8_t value)
@@ -159,10 +168,8 @@ public:
 		if (m_state == st_disabled)
 			return;
 
-		while (m_state != st_tx)
-			this->process();
-
-		while ((USARTC0.STATUS & USART_TXCIF_bm) == 0)
+		this->cancel_read();
+		while (m_state != st_idle)
 			this->process();
 
 		PdiClk::make_input();
@@ -171,7 +178,8 @@ public:
 		USARTC0.CTRLA = 0;
 		USARTC0.CTRLB = 0;
 		USARTC0.CTRLC = 0;
-
+		PORTC.PIN1CTRL = 0;
+	
 		m_state = st_disabled;
 	}
 
@@ -180,7 +188,8 @@ public:
 		if (m_state != st_disabled)
 			return;
 
-		PdiClk::make_low();
+		PORTC.PIN1CTRL = PORT_INVEN_bm;
+		PdiClk::make_high();
 		PdiData::make_high();
 
 		m_state = st_rst_disable;
@@ -189,7 +198,7 @@ public:
 
 	bool tx_ready() const
 	{
-		return m_state == st_tx && !m_tx_buffer.full() && m_rx_count == 0;
+		return (m_state == st_idle || m_state == st_busy) && !m_tx_buffer.full() && m_rx_count == 0;
 	}
 
 	bool tx_empty() const
@@ -216,12 +225,31 @@ public:
 	uint8_t read()
 	{
 		while (!this->rx_ready())
-		{
-		}
+			this->process();
 
 		uint8_t res = m_rx_buffer.top();
 		m_rx_buffer.pop();
 		return res;
+	}
+
+	void cancel_read()
+	{
+		if (m_rx_count)
+			this->cancel();
+	}
+
+	void cancel()
+	{
+		if (m_state == st_busy)
+		{
+			USARTC0.CTRLA = 0;
+			USARTC0.CTRLB = USART_TXEN_bm;
+			PdiData::make_output();
+			m_rx_count = 0;
+			m_tx_buffer.clear();
+			m_rx_buffer.clear();
+			m_state = st_idle;
+		}
 	}
 
 	// Must be called at least every 50us
@@ -246,13 +274,17 @@ public:
 			}
 			break;
 		case st_wait_ticks:
-			if (m_clock.value() - m_time_base >= 64) // FIXME: time constants
+			if (m_clock.value() - m_time_base >= 128) // FIXME: time constants
 			{
-				m_state = st_tx;
+				m_state = st_idle;
 				m_rx_count = 0;
 			}
 			break;
-		case st_tx:
+		case st_idle:
+			pin_led::make_low();
+			break;
+		case st_busy:
+			pin_led::make_high();
 			break;
 		}
 	}
@@ -264,6 +296,8 @@ public:
 		{
 			USARTC0.CTRLA = 0;
 			USARTC0.CTRLB = USART_TXEN_bm;
+			PdiData::make_output();
+			m_state = st_idle;
 		}
 	}
 
@@ -279,17 +313,22 @@ public:
 		m_tx_buffer.pop();
 		if (m_tx_buffer.empty())
 		{
-			if (m_rx_count)
-				USARTC0.CTRLA = USART_TXCINTLVL_MED_gc;
-			else
-				USARTC0.CTRLA = 0;
+			USARTC0.CTRLA = USART_TXCINTLVL_MED_gc;
 		}
 	}
 	
 	void intr_txc()
 	{
-		USARTC0.CTRLB = USART_RXEN_bm;
-		USARTC0.CTRLA = USART_RXCINTLVL_MED_gc;
+		if (m_rx_count)
+		{
+			PdiData::make_input();
+			USARTC0.CTRLB = USART_RXEN_bm;
+			USARTC0.CTRLA = USART_RXCINTLVL_MED_gc;
+		}
+		else
+		{
+			m_state = st_idle;
+		}
 	}
 
 private:
@@ -299,7 +338,7 @@ private:
 	avrlib::buffer<uint8_t, 16> m_tx_buffer;
 	volatile uint8_t m_rx_count;
 
-	enum { st_disabled, st_rst_disable, st_wait_ticks, st_tx } m_state;
+	enum { st_disabled, st_rst_disable, st_wait_ticks, st_idle, st_busy } volatile m_state;
 };
 typedef pdi_t<clock_t, pin_buf_rst, pin_buf_pdi> my_pdi_t;
 my_pdi_t pdi(clock);
@@ -310,7 +349,7 @@ ISR(USARTC0_RXC_vect) { pdi.intr_rxc(); }
 
 void process()
 {
-	//pdi.process();
+	pdi.process();
 	com_inner.process_tx();
 	com_outer.process_tx();
 	com_app.process_tx();
@@ -324,8 +363,8 @@ class context_t
 {
 public:
 	context_t()
-		: hxmega(pdi, clock), havricsp(spi, clock),
-		vdd_timeout(clock, 4000000), usb_test_timeout(clock, 4000000),
+		: hxmega(pdi, clock, &process), havricsp(spi, clock),
+		vdd_timeout(clock, 1000000), usb_test_timeout(clock, 1000000),
 		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_comm_allowed(true)
 	{
 		usb_test_timeout.cancel();
@@ -683,14 +722,14 @@ private:
 			vdd_timeout.cancel();
 			cp.clear();
 			return true;
+		case 254:
+			cp.clear();
+			return true;
 		case 255:
 			break;
 		default:
 			if (&com == m_primary_com && handler)
-			{
-				if (!handler->handle_command(cp, com))
-					cp.clear();
-			}
+				return handler->handle_command(cp, com);
 		}
 
 		return false;
@@ -732,7 +771,7 @@ private:
 	avrlib::bootseq bootseq;
 	avrlib::command_parser cp_outer, cp_inner;
 
-	handler_xmega<my_pdi_t, com_t, clock_t> hxmega;
+	handler_xmega<my_pdi_t, com_t, clock_t, void (*)()> hxmega;
 	handler_avricsp<spi_t, com_t, clock_t, pin_buf_rst> havricsp;
 	handler_base<com_t> * handler;
 

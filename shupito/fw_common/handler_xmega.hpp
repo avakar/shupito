@@ -4,7 +4,7 @@
 #include "handler_base.hpp"
 #include "pdi_instr.hpp"
 
-template <typename Pdi, typename Com, typename Clock>
+template <typename Pdi, typename Com, typename Clock, typename Process>
 class handler_xmega
 	: public handler_base<Com>
 {
@@ -13,8 +13,8 @@ public:
 	typedef Clock clock_t;
 	typedef Com com_t;
 
-	handler_xmega(pdi_t & pdi, clock_t & clock)
-		: pdi(pdi), clock(clock), m_fuse_address(0)
+	handler_xmega(pdi_t & pdi, clock_t & clock, Process process)
+		: pdi(pdi), clock(clock), m_fuse_address(0), process(process)
 	{
 	}
 
@@ -61,7 +61,7 @@ public:
 
 			// Clear the RESET register first
 			// TODO: is this necessary?
-			pdi_stcs(pdi, 0x01, 0x00);
+			//pdi_stcs(pdi, 0x01, 0x00);
 
 			pdi.clear();
 
@@ -154,7 +154,7 @@ public:
 				pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x40);
 				pdi_sts(pdi, (uint32_t)0x010001CB, (uint8_t)0x01);
 
-				bool success = pdi_wait_nvm_busy(pdi, clock, 10000, process);
+				bool success = pdi_wait_nvm_busy(pdi, clock, 50000, process);
 				com.write(0x80);
 				com.write(0x51);
 				com.write(!success);
@@ -275,12 +275,12 @@ public:
 	}
 
 private:
-	static void process() {}
-
 	pdi_t & pdi;
 	clock_t & clock;
 
 	uint8_t m_fuse_address;
+
+	Process process;
 };
 
 #endif

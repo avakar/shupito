@@ -122,7 +122,10 @@ bool pdi_read(Pdi & pdi, R & r, Clock & clock, Process const & process)
 		while (!pdi.rx_ready())
 		{
 			if (clock.value() - t > 1000)
+			{
+				pdi.cancel_read();
 				return false;
+			}
 			process();
 		}
 
