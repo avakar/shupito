@@ -29,8 +29,6 @@ public:
 		{
 		case 1:
 			{
-				uint8_t pdi_status = 0;
-
 				// Enable programming mode
 				pdi.init();
 				while (!pdi.tx_ready())
@@ -38,17 +36,20 @@ public:
 
 				typename clock_t::time_type t = clock.value();
 
+				uint8_t error = 0;
+
 				pdi_stcs(pdi, 0x01, 0x59); // Ensure RESET
 				pdi_ldcs(pdi, 1);
 
 				uint8_t reset = 0;
-				uint8_t error = pdi_read(pdi, reset, clock, process);
+				error = pdi_read(pdi, reset, clock, process);
 				if (!error && (reset & 1) == 0)
 					error = 5;
 
 				if (!error)
 					pdi_key(pdi, 0x1289AB45CDD888FFull);
 
+				uint8_t pdi_status = 0;
 				while (!error && (pdi_status & 0x02) == 0 && clock.value() - t < 100000)
 				{
 					pdi_ldcs(pdi, 0);
@@ -68,8 +69,8 @@ public:
 			break;
 		case 2: // Leave programming mode
 
-			// Clear the RESET register first
-			// TODO: is this necessary?
+			// Clear the RESET register first; otherwise the chip will be held in reset
+			// by the PDI controller until an external reset is issued.
 			pdi_stcs(pdi, 0x01, 0x00);
 
 			pdi.clear();

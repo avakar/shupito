@@ -182,13 +182,8 @@ public:
 		while (m_state != st_idle)
 			this->process();
 
-		PdiData::make_low();
-		PdiClk::make_low();
-
-		USARTC0.CTRLA = 0;
-		USARTC0.CTRLB = 0;
-		USARTC0.CTRLC = 0;
-	
+		// A few more clocks should be supplied
+		// to make sure that the last byte was received correctly
 		m_state = st_unrst;
 		m_time_base = m_clock.value();
 	}
@@ -199,9 +194,17 @@ public:
 			return;
 
 		PORTC.PIN1CTRL = PORT_INVEN_bm;
-		PdiClk::make_high();
 
-		m_state = st_rst;
+		// PdiClk is now inverted, so as to make
+		// the USART sample on the rising edge.
+		// The following will therefor NOT put the chip
+		// in reset (which we don't want to, enabling the PDI
+		// might be a prelude to debugging).
+		PdiClk::make_low();
+
+		PdiData::make_high();
+		m_state = st_rst_disable;
+
 		m_time_base = m_clock.value();
 	}
 
@@ -269,14 +272,6 @@ public:
 		{
 		case st_disabled:
 			break;
-		case st_rst:
-			if (m_clock.value() - m_time_base >= 8) // FIXME: time constants
-			{
-				PdiData::make_high();
-				m_state = st_rst_disable;
-				m_time_base += 8;
-			}
-			break;
 		case st_rst_disable:
 			if (m_clock.value() - m_time_base >= 8) // FIXME: time constants
 			{
@@ -296,14 +291,20 @@ public:
 			{
 				m_state = st_idle;
 				m_rx_count = 0;
+				pdi_stcs(*this, 0x02/*CTRL*/, 0x03/*GUARDTIME_16*/);
 			}
 			break;
 		case st_unrst:
-			if (m_clock.value() - m_time_base >= 10000) // FIXME: time constants
+			if (m_clock.value() - m_time_base >= 16) // FIXME: time constants
 			{
 				PdiClk::make_input();
 				PdiData::make_input();
 				PORTC.PIN1CTRL = 0;
+
+				USARTC0.CTRLA = 0;
+				USARTC0.CTRLB = 0;
+				USARTC0.CTRLC = 0;
+
 				m_state = st_disabled;
 			}
 			break;
@@ -363,7 +364,7 @@ private:
 	avrlib::buffer<uint8_t, 16> m_tx_buffer;
 	volatile uint8_t m_rx_count;
 
-	enum { st_disabled, st_rst, st_rst_disable, st_wait_ticks, st_idle, st_busy, st_unrst } volatile m_state;
+	enum { st_disabled, st_rst_disable, st_wait_ticks, st_idle, st_busy, st_unrst } volatile m_state;
 };
 typedef pdi_t<clock_t, pin_buf_rst, pin_buf_pdi> my_pdi_t;
 my_pdi_t pdi(clock);
