@@ -59,6 +59,7 @@ AVRLIB_MAKE_XMEGA_PIN(pin_rstd, PORTD, 0);
 AVRLIB_MAKE_XMEGA_PIN(pin_rst,  PORTC, 1);
 
 AVRLIB_MAKE_XMEGA_PIN(pin_pdi,  PORTC, 3);
+AVRLIB_MAKE_XMEGA_PIN(pin_xck,  PORTC, 5);
 
 AVRLIB_MAKE_XMEGA_PIN(pin_rxd,  PORTC, 6);
 AVRLIB_MAKE_XMEGA_PIN(pin_txd,  PORTC, 7);
@@ -115,6 +116,7 @@ struct pin_buffer_with_oe
 typedef pin_buffer_with_oe<pin_txd, pin_txdd> pin_buf_txd;
 typedef pin_buffer_with_oe<pin_rst, pin_rstd> pin_buf_rst;
 typedef pin_buffer_with_oe<pin_pdi, pin_pdid> pin_buf_pdi;
+typedef pin_buffer_with_oe<pin_xck, pin_pdid> pin_buf_xck;
 typedef pin_rxd pin_buf_rxd;
 
 void avrlib::assertion_failed(char const * message, char const * file, int line)
@@ -138,15 +140,15 @@ public:
 		USARTC1.CTRLC = 0;
 
 		pin_buf_txd::make_input();
-		pin_buf_pdi::make_input();
+		pin_buf_xck::make_input();
 	}
 
 	error_t start_master(uint16_t speed_khz)
 	{
 		pin_buf_txd::make_low();
-		pin_buf_pdi::make_low();
+		pin_buf_xck::make_low();
 
-		USARTC1.BAUDCTRLA = 63;
+		USARTC1.BAUDCTRLA = 127;
 		USARTC1.BAUDCTRLB = 0;
 		USARTC1.CTRLC = USART_CMODE_MSPI_gc;
 		USARTC1.CTRLB = USART_RXEN_bm | USART_TXEN_bm;
@@ -427,7 +429,7 @@ public:
 		// Prepare the ADC
 		ADCA.CH0.CTRL = ADC_CH_INPUTMODE_SINGLEENDED_gc;
 		ADCA.CH0.MUXCTRL = ADC_CH_MUXPOS_PIN6_gc;
-		ADCA.PRESCALER = ADC_PRESCALER_DIV16_gc;
+		ADCA.PRESCALER = ADC_PRESCALER_DIV64_gc;
 		ADCA.REFCTRL = ADC_REFSEL_INT1V_gc;
 		ADCA.CTRLB = ADC_RESOLUTION_8BIT_gc;
 		ADCA.CTRLA = ADC_ENABLE_bm;

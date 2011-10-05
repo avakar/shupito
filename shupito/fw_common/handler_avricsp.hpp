@@ -79,6 +79,7 @@ public:
 		case 2:
 			// Release the reset line
 			spi.clear();
+			ResetPin::make_input();
 			m_programming_enabled = false;
 			com.write(0x80);
 			com.write(0x21);
