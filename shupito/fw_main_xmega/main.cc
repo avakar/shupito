@@ -534,7 +534,8 @@ private:
 				case 0:
 					// Send the set of available pipes
 					com.write(0x80);
-					com.write(0x95);
+					com.write(0x96);
+					com.write(0x00);
 					com.write(0x00);
 					com.write(0x03);
 					com.write('a');
@@ -546,7 +547,8 @@ private:
 					if (!inner && cp.size() == 5 && cp[2] == 'u' && cp[3] == 's' && cp[4] == 'b')
 					{
 						com.write(0x80);
-						com.write(0x92);
+						com.write(0x93);
+						com.write(0x00);
 						com.write(0x01);
 						com.write(0x02);
 						inner_redirected = true;
@@ -554,7 +556,8 @@ private:
 					else if (cp.size() == 5 && cp[2] == 'a' && cp[3] == 'p' && cp[4] == 'p' && m_app_comm_allowed)
 					{
 						com.write(0x80);
-						com.write(0x92);
+						com.write(0x93);
+						com.write(0x00);
 						com.write(0x01);
 						com.write(0x01);
 						m_app_com = &com;
@@ -564,7 +567,8 @@ private:
 					else
 					{
 						com.write(0x80);
-						com.write(0x92);
+						com.write(0x93);
+						com.write(0x00);
 						com.write(0x01);
 						com.write(0x00);
 					}
@@ -574,7 +578,8 @@ private:
 					if (!inner && cp.size() == 3 && cp[2] == 2)
 					{
 						com.write(0x80);
-						com.write(0x92);
+						com.write(0x93);
+						com.write(0x00);
 						com.write(0x02);
 						com.write(0x02);
 						inner_redirected = false;
@@ -582,7 +587,8 @@ private:
 					else if (cp.size() == 3 && cp[2] == 1)
 					{
 						com.write(0x80);
-						com.write(0x92);
+						com.write(0x93);
+						com.write(0x00);
 						com.write(0x02);
 						com.write(0x01);
 						com_app.usart().close();
@@ -592,7 +598,8 @@ private:
 					else
 					{
 						com.write(0x80);
-						com.write(0x91);
+						com.write(0x92);
+						com.write(0x00);
 						com.write(0x02);
 					}
 					break;
