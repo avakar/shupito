@@ -5,7 +5,7 @@
 #include "avrlib/stopwatch.hpp"
 #include <avr/io.h>
 
-template <typename Spi, typename Com, typename Clock, typename ResetPin>
+template <typename Spi, typename Com, typename Clock, typename ResetPin, typename Process>
 class handler_avricsp
 	: public handler_base<Com>
 {
@@ -14,8 +14,8 @@ public:
 	typedef Com com_t;
 	typedef Clock clock_t;
 
-	handler_avricsp(spi_t & spi, clock_t & clock)
-		: spi(spi), clock(clock), m_programming_enabled(false)
+	handler_avricsp(spi_t & spi, clock_t & clock, Process process)
+		: spi(spi), clock(clock), m_programming_enabled(false), m_process(process)
 	{
 	}
 
@@ -44,16 +44,16 @@ public:
 
 			// Pull down the reset line and send "Programming enable" sequence
 			ResetPin::make_low();
-			wait(clock, 1000);
+			wait(clock, 1000, m_process);
 
 			ResetPin::set_value(true);
 			for (uint8_t i = 0; i < 3; ++i)
 			{
-				wait(clock, 1000);
+				wait(clock, 1000, m_process);
 				ResetPin::set_value(false);
 
 				// There has to be a 20ms delay on atmega128
-				wait(clock, 20);
+				wait(clock, 20, m_process);
 
 				spi.send(0xAC);
 				spi.send(0x53);
@@ -283,6 +283,7 @@ private:
 
 	bool m_programming_enabled;
 	uint16_t m_mempage_ptr;
+	Process m_process;
 };
 
 #endif

@@ -134,36 +134,11 @@ class spi_t
 public:
 	typedef uint8_t error_t;
 
-	void clear()
-	{
-		USARTC1.CTRLB = 0;
-		USARTC1.CTRLC = 0;
-
-		pin_buf_txd::make_input();
-		pin_buf_xck::make_input();
-	}
-
-	error_t start_master(uint16_t speed_khz)
-	{
-		pin_buf_txd::make_low();
-		pin_buf_xck::make_low();
-
-		USARTC1.BAUDCTRLA = 127;
-		USARTC1.BAUDCTRLB = 0;
-		USARTC1.CTRLC = USART_CMODE_MSPI_gc;
-		USARTC1.CTRLB = USART_RXEN_bm | USART_TXEN_bm;
-		return 0;
-	}
-
-	uint8_t send(uint8_t v)
-	{
-		USARTC1.DATA = v;
-		while ((USARTC1.STATUS & USART_RXCIF_bm) == 0)
-		{
-		}
-		return USARTC1.DATA;
-	}
+	void clear();
+	error_t start_master(uint16_t speed_khz);
+	uint8_t send(uint8_t v);
 };
+
 spi_t spi;
 
 template <typename Clock, typename PdiClk, typename PdiData>
@@ -188,6 +163,7 @@ public:
 		// to make sure that the last byte was received correctly
 		m_state = st_unrst;
 		m_time_base = m_clock.value();
+		pin_led::set_value(false);
 	}
 
 	void init()
@@ -296,6 +272,12 @@ public:
 				pdi_stcs(*this, 0x02/*CTRL*/, 0x03/*GUARDTIME_16*/);
 			}
 			break;
+		case st_idle:
+			pin_led::set_value(false);
+			break;
+		case st_busy:
+			pin_led::set_value(true);
+			break;
 		case st_unrst:
 			if (m_clock.value() - m_time_base >= 16) // FIXME: time constants
 			{
@@ -311,8 +293,6 @@ public:
 			}
 			break;
 		}
-
-		pin_led::set_value(m_state == st_busy);
 	}
 
 	void intr_rxc()
@@ -391,9 +371,9 @@ class context_t
 {
 public:
 	context_t()
-		: hxmega(pdi, clock, &process), havricsp(spi, clock),
+		: hxmega(pdi, clock, &process), havricsp(spi, clock, &process),
 		vdd_timeout(clock, 1000000), usb_test_timeout(clock, 1000000),
-		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_comm_allowed(true)
+		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_com_state(enabled)
 	{
 		usb_test_timeout.cancel();
 	}
@@ -521,7 +501,80 @@ public:
 		process();
 	}
 
+	void allow_com_app()
+	{
+		if (m_app_com_state != disabled)
+			return;
+
+		m_app_com_state = enabled;
+		if (m_app_com)
+			this->send_pipe_list(*m_app_com);
+	}
+
+	void disallow_com_app()
+	{
+		if (m_app_com_state == disabled)
+			return;
+
+		if (m_app_com)
+			this->deactivate_com_app(*m_app_com);
+		m_app_com_state = disabled;
+		if (m_app_com)
+			this->send_pipe_list(*m_app_com);
+	}
+
 private:
+	void activate_com_app(com_t & com)
+	{
+		if (m_app_com_state == disabled)
+			return;
+
+		com.write(0x80);
+		com.write(0x93);
+		com.write(0x00);
+		com.write(0x01);
+		com.write(0x01);
+
+		if (m_app_com_state != active)
+		{
+			m_app_com = &com;
+			pin_buf_txd::make_high();
+			com_app.usart().open(USARTC1, true);
+			m_app_com_state = active;
+		}
+	}
+
+	void deactivate_com_app(com_t & com)
+	{
+		if (m_app_com_state != active)
+			return;
+
+		com_app.usart().close();
+		pin_buf_txd::make_input();
+		m_app_com_state = enabled;
+
+		com.write(0x80);
+		com.write(0x93);
+		com.write(0x00);
+		com.write(0x02);
+		com.write(0x01);
+	}
+
+	void send_pipe_list(com_t & com)
+	{
+		com.write(0x80);
+		com.write(m_app_com_state != disabled? 0x96: 0x92);
+		com.write(0x00);
+		com.write(0x00);
+		if (m_app_com_state != disabled)
+		{
+			com.write(0x03);
+			com.write('a');
+			com.write('p');
+			com.write('p');
+		}
+	}
+
 	bool process_tunnel(avrlib::command_parser & cp, com_t & com, bool inner)
 	{
 		switch (cp.command())
@@ -532,15 +585,7 @@ private:
 				switch (cp[1])
 				{
 				case 0:
-					// Send the set of available pipes
-					com.write(0x80);
-					com.write(0x96);
-					com.write(0x00);
-					com.write(0x00);
-					com.write(0x03);
-					com.write('a');
-					com.write('p');
-					com.write('p');
+					this->send_pipe_list(com);
 					break;
 				case 1:
 					// Activate a pipe
@@ -553,16 +598,9 @@ private:
 						com.write(0x02);
 						inner_redirected = true;
 					}
-					else if (cp.size() == 5 && cp[2] == 'a' && cp[3] == 'p' && cp[4] == 'p' && m_app_comm_allowed)
+					else if (cp.size() == 5 && cp[2] == 'a' && cp[3] == 'p' && cp[4] == 'p' && m_app_com_state != disabled)
 					{
-						com.write(0x80);
-						com.write(0x93);
-						com.write(0x00);
-						com.write(0x01);
-						com.write(0x01);
-						m_app_com = &com;
-						pin_buf_txd::make_high();
-						com_app.usart().open(USARTC1, true);
+						this->activate_com_app(com);
 					}
 					else
 					{
@@ -586,14 +624,7 @@ private:
 					}
 					else if (cp.size() == 3 && cp[2] == 1)
 					{
-						com.write(0x80);
-						com.write(0x93);
-						com.write(0x00);
-						com.write(0x02);
-						com.write(0x01);
-						com_app.usart().close();
-						pin_buf_txd::make_input();
-						m_app_com = 0;
+						this->deactivate_com_app(com);
 					}
 					else
 					{
@@ -807,7 +838,7 @@ private:
 	avrlib::command_parser cp_outer, cp_inner;
 
 	handler_xmega<my_pdi_t, com_t, clock_t, void (*)()> hxmega;
-	handler_avricsp<spi_t, com_t, clock_t, pin_buf_rst> havricsp;
+	handler_avricsp<spi_t, com_t, clock_t, pin_buf_rst, void (*)()> havricsp;
 	handler_base<com_t> * handler;
 
 	avrlib::timeout<clock_t> vdd_timeout;
@@ -817,10 +848,47 @@ private:
 	com_t * m_vdd_com;
 	com_t * m_app_com;
 
-	bool m_app_comm_allowed;
+	enum { disabled, enabled, active } m_app_com_state;
 };
 
 context_t ctx;
+
+void spi_t::clear()
+{
+	USARTC1.CTRLB = 0;
+	USARTC1.CTRLC = 0;
+
+	pin_buf_txd::make_input();
+	pin_buf_xck::make_input();
+
+	ctx.allow_com_app();
+}
+
+spi_t::error_t spi_t::start_master(uint16_t speed_khz)
+{
+	ctx.disallow_com_app();
+
+	pin_buf_txd::make_low();
+	pin_buf_xck::make_low();
+
+	USARTC1.BAUDCTRLA = 127;
+	USARTC1.BAUDCTRLB = 0;
+	USARTC1.CTRLC = USART_CMODE_MSPI_gc;
+	USARTC1.CTRLB = USART_RXEN_bm | USART_TXEN_bm;
+	return 0;
+}
+
+uint8_t spi_t::send(uint8_t v)
+{
+	USARTC1.DATA = v;
+	pin_led::set_value(true);
+	while ((USARTC1.STATUS & USART_RXCIF_bm) == 0)
+	{
+	}
+	pin_led::set_value(false);
+	return USARTC1.DATA;
+}
+
 
 int main()
 {
