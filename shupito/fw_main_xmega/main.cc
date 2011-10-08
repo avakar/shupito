@@ -373,10 +373,12 @@ class context_t
 public:
 	context_t()
 		: hxmega(pdi, clock, &process), havricsp(spi, clock, &process),
-		vdd_timeout(clock, 1000000), usb_test_timeout(clock, 1000000),
-		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_com_state(enabled)
+		vdd_timeout(clock, 100000), usb_test_timeout(clock, 1000000), m_vccio_drive_check_timeout(clock, 200000),
+		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_com_state(enabled), m_vccio_drive_state(enabled),
+		m_vccio_voltage(0)
 	{
 		usb_test_timeout.cancel();
+		m_vccio_drive_check_timeout.cancel();
 	}
 
 	void init()
@@ -412,8 +414,11 @@ public:
 		ADCA.CH0.MUXCTRL = ADC_CH_MUXPOS_PIN6_gc;
 		ADCA.PRESCALER = ADC_PRESCALER_DIV64_gc;
 		ADCA.REFCTRL = ADC_REFSEL_INT1V_gc;
-		ADCA.CTRLB = ADC_RESOLUTION_8BIT_gc;
+		ADCA.CTRLB = ADC_CONMODE_bm | ADC_RESOLUTION_12BIT_gc;
 		ADCA.CTRLA = ADC_ENABLE_bm;
+
+		// Start the conversion immediately
+		ADCA.CH0.CTRL |= ADC_CH_START_bm;
 
 		handler = 0;
 		vdd_timeout.cancel();
@@ -423,21 +428,44 @@ public:
 	{
 		if (vdd_timeout)
 		{
-			vdd_timeout.ack();
-			ADCA.CH0.CTRL |= ADC_CH_START_bm;
+			vdd_timeout.restart();
+			if (m_vdd_com)
+			{
+				m_vdd_com->write(0x80);
+				m_vdd_com->write(0xa4);
+				m_vdd_com->write(0x01);
+				m_vdd_com->write(0x03);
+				m_vdd_com->write(m_vccio_voltage);
+				m_vdd_com->write(m_vccio_voltage >> 8);
+			}
 		}
 
 		if (ADCA.CH0.INTFLAGS & ADC_CH_CHIF_bm)
 		{
 			ADCA.CH0.INTFLAGS = ADC_CH_CHIF_bm;
+			m_vccio_voltage = ADCA.CH0RESL;
+			m_vccio_voltage |= (ADCA.CH0RESH << 8);
+			m_vccio_voltage = (int32_t)m_vccio_voltage * 27 / 10;
+			ADCA.CH0.CTRL |= ADC_CH_START_bm;
+		}
+
+		if (m_vccio_drive_state == active && m_vccio_drive_check_timeout)
+		{
+			m_vccio_drive_check_timeout.force();
+			if (m_vccio_voltage < 4500)
+				this->set_vccio_drive(0, m_vdd_com);
+		}
+		if (m_vccio_drive_state == disabled && m_vccio_voltage < 300)
+		{
+			m_vccio_drive_state = enabled;
 			if (m_vdd_com)
-			{
-				m_vdd_com->write(0x80);
-				m_vdd_com->write(0xa3);
-				m_vdd_com->write(0x01);
-				m_vdd_com->write(0x03);
-				m_vdd_com->write(ADCA.CH0RESL);
-			}
+				this->send_vccio_drive_list(*m_vdd_com);
+		}
+		if (m_vccio_drive_state == enabled && m_vccio_voltage > 500)
+		{
+			m_vccio_drive_state = disabled;
+			if (m_vdd_com)
+				this->send_vccio_drive_list(*m_vdd_com);
 		}
 
 		if (inner_redirected && !com_inner.empty())
@@ -657,6 +685,56 @@ private:
 		return false;
 	}
 
+	void send_vccio_state(com_t * pCom)
+	{
+		if (!pCom)
+			return;
+
+		pCom->write(0x80);
+		pCom->write(0xa3);
+		pCom->write(0x01);  // VDD
+		pCom->write(0x01);  // get_drive
+		pCom->write(pin_ext_sup::get_value());
+	}
+
+	void set_vccio_drive(uint8_t value, com_t * pCom)
+	{
+		if (value == 1 && m_vccio_drive_state != disabled)
+		{
+			pin_ext_sup::set_value(true);
+			m_vccio_drive_check_timeout.start();
+			m_vccio_drive_state = active;
+		}
+		else
+		{
+			pin_ext_sup::set_value(false);
+			m_vccio_drive_check_timeout.cancel();
+			m_vccio_drive_state = enabled;
+		}
+
+		this->send_vccio_state(pCom);
+	}
+
+	void send_vccio_drive_list(com_t & com)
+	{
+		com.write(0x80);
+		com.write(m_vccio_drive_state != disabled? 0xaa: 0xa6);
+		com.write(0x00);
+		com.write(0x01);  // VDD
+
+		com.write(0x00);  // <hiz>
+		com.write(0x00);
+		com.write(0x00);
+		com.write(0x00);
+		if (m_vccio_drive_state != disabled)
+		{
+			com.write(0x88);  // 5V, 100mA
+			com.write(0x13);
+			com.write(0x64);
+			com.write(0x00);
+		}
+	}
+
 	bool process_command(avrlib::command_parser & cp, com_t & com)
 	{
 		switch (cp.command())
@@ -763,30 +841,13 @@ private:
 				com.write('I');
 				com.write('O');
 
-				com.write(0x80);
-				com.write(0xaa);
-				com.write(0x00);
-				com.write(0x01);  // VDD
-
-				com.write(0x00);  // <hiz>
-				com.write(0x00);
-				com.write(0x00);
-				com.write(0x00);
-				com.write(0x88);  // 5V, 100mA
-				com.write(0x13);
-				com.write(0x64);
-				com.write(0x00);
-
-				com.write(0x80);
-				com.write(0xa3);
-				com.write(0x01);  // VDD
-				com.write(0x01);  // get_drive
-				com.write(pin_ext_sup::get_value());
+				this->send_vccio_drive_list(com);
+				this->send_vccio_state(&com);
 			}
 
 			if (cp.size() == 3 && cp[0] == 1 && cp[1] == 2)
 			{
-				pin_ext_sup::set_value(cp[2] == 1);
+				this->set_vccio_drive(cp[2], &com);
 			}
 
 			return true;
@@ -885,12 +946,15 @@ private:
 
 	avrlib::timeout<clock_t> vdd_timeout;
 	avrlib::timeout<clock_t> usb_test_timeout;
+	avrlib::timeout<clock_t> m_vccio_drive_check_timeout;
 
 	com_t * m_primary_com;
 	com_t * m_vdd_com;
 	com_t * m_app_com;
 
-	enum { disabled, enabled, active } m_app_com_state;
+	enum { disabled, enabled, active } m_app_com_state, m_vccio_drive_state;
+
+	int16_t m_vccio_voltage;
 };
 
 context_t ctx;
