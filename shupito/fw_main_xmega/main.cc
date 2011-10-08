@@ -48,6 +48,7 @@ ISR(TCD0_OVF_vect)
 		static void make_low() { port.OUTCLR = (1<<(pin)); port.DIRSET = (1<<(pin)); } \
 		static void make_output() { port.DIRSET = (1<<(pin)); } \
 		static void set_value(uint8_t value) { if (value) port.OUTSET = (1<<(pin)); else port.OUTCLR = (1<<(pin)); } \
+		static uint8_t get_value() { return (port.OUT & (1<<(pin))) != 0; } \
 		static void toggle() { port.OUTTGL = (1<<(pin)); } \
 	}
 
@@ -432,8 +433,9 @@ public:
 			if (m_vdd_com)
 			{
 				m_vdd_com->write(0x80);
-				m_vdd_com->write(0xa2);
+				m_vdd_com->write(0xa3);
 				m_vdd_com->write(0x01);
+				m_vdd_com->write(0x03);
 				m_vdd_com->write(ADCA.CH0RESL);
 			}
 		}
@@ -745,8 +747,48 @@ private:
 
 			return true;
 		case 0xa:
-			if (cp.size() == 2 && cp[0] == 1)
-				pin_ext_sup::set_value(cp[1] == 1);
+			if (cp.size() == 2 && cp[0] == 0 && cp[1] == 0)
+			{
+				com.write(0x80);
+				com.write(0xa9);
+				com.write(0x00);
+				com.write(0x00);
+
+				com.write(0x00); // flags
+
+				com.write(5);
+				com.write('V');
+				com.write('C');
+				com.write('C');
+				com.write('I');
+				com.write('O');
+
+				com.write(0x80);
+				com.write(0xaa);
+				com.write(0x00);
+				com.write(0x01);  // VDD
+
+				com.write(0x00);  // <hiz>
+				com.write(0x00);
+				com.write(0x00);
+				com.write(0x00);
+				com.write(0x88);  // 5V, 100mA
+				com.write(0x13);
+				com.write(0x64);
+				com.write(0x00);
+
+				com.write(0x80);
+				com.write(0xa3);
+				com.write(0x01);  // VDD
+				com.write(0x01);  // get_drive
+				com.write(pin_ext_sup::get_value());
+			}
+
+			if (cp.size() == 3 && cp[0] == 1 && cp[1] == 2)
+			{
+				pin_ext_sup::set_value(cp[2] == 1);
+			}
+
 			return true;
 		case '?':
 			avrlib::send(com, "Shupito v2.0\n");
