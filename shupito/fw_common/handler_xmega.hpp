@@ -191,9 +191,15 @@ public:
 					pdi_sts(pdi, (uint32_t)0x010001CB, (uint8_t)0x01);
 
 					error = pdi_wait_nvm_busy(pdi, clock, 10000, process);
-
-					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x23);
-					pdi_st_ptr(pdi, addr);
+					if (error)
+					{
+						pdi.clear();
+					}
+					else
+					{
+						pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x23);
+						pdi_st_ptr(pdi, addr);
+					}
 				}
 				else if (memid == 3)
 				{
@@ -235,6 +241,8 @@ public:
 							process();
 						pdi_sts(pdi, uint32_t(0x08F0020 | (m_fuse_address & 0x07)), cp[i]);
 						error = pdi_wait_nvm_busy(pdi, clock, 100000, process);
+						if (error)
+							pdi.clear();
 						++m_fuse_address;
 					}
 				}
@@ -262,6 +270,8 @@ public:
 					pdi_sts(pdi, addr, (uint8_t)0);
 
 					error = pdi_wait_nvm_busy(pdi, clock, 50000, process);
+					if (error)
+						pdi.clear();
 				}
 				else if (memid == 3)
 				{
