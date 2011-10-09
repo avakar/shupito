@@ -16,14 +16,16 @@ class Or:
         return chr(0x80 | len(self.children)) + ''.join((child.store() for child in self.children))
 
 class Config:
-    def __init__(self, guid, first_pipe, pipe_count, flags = 0):
+    def __init__(self, guid, first_pipe, pipe_count, flags = 0, data=''):
         self.flags = flags
         self.guid = guid
         self.first_pipe = first_pipe
         self.pipe_count = pipe_count
+        self.data = data
 
     def store(self):
-        return chr(0) + chr(self.flags) + self.guid.bytes + chr(self.first_pipe) + chr(self.pipe_count)
+        return (chr(0) + chr(self.flags) + self.guid.bytes + chr(self.first_pipe) + chr(self.pipe_count)
+            + chr(len(self.data)) + self.data)
 
 def make_descriptor(device_guid, child):
     return (chr(1) # version
@@ -52,7 +54,8 @@ open('desc.h', 'w').write(to_c(adler16(make_descriptor(UUID('093d7f32-cdc6-4928-
             Config(UUID('46dbc865-b4d0-466b-9b70-2f3f5b264e65'), 1, 8), # SPI
             Config(UUID('71efb903-3030-4fd3-8896-1946aba37efc'), 1, 8)  # PDI
         ),
-        Config(UUID('356e9bf7-8718-4965-94a4-0be370c8797c'), 9, 1, flags=0x03),  # tunnel
+        Config(UUID('356e9bf7-8718-4965-94a4-0be370c8797c'), 9, 1, flags=0x03,   # tunnel
+            data=struct.pack('<BI', 1, 2000000)),
         Config(UUID('1d4738a0-fc34-4f71-aa73-57881b278cb1'), 10, 1, flags=0x00)  # measurement
     )
 ))))

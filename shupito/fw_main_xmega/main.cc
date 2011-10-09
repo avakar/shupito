@@ -389,7 +389,7 @@ public:
 		: hxmega(pdi, clock, &process), havricsp(spi, clock, &process),
 		vdd_timeout(clock, clock_t::us<100000>::value), usb_test_timeout(long_clock, long_clock_t::us<1000000>::value), m_vccio_drive_check_timeout(clock, clock_t::us<200000>::value),
 		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_com_state(enabled), m_vccio_drive_state(enabled),
-		m_vccio_voltage(0)
+		m_vccio_voltage(0), m_com_app_speed((-1 << 12)|102 /*38400*/)
 	{
 		usb_test_timeout.cancel();
 		m_vccio_drive_check_timeout.cancel();
@@ -401,12 +401,12 @@ public:
 		PORTD.OUTSET = (1<<7);
 		PORTD.OUTCLR = (1<<5);
 		PORTD.DIRSET = (1<<5)|(1<<7);
-		com_inner.usart().open(USARTD1, true, true /*synchronous*/);
+		com_inner.usart().open(USARTD1, 416, true, true /*synchronous*/);
 
 		PORTE.PIN2CTRL = PORT_OPC_PULLUP_gc;
 		PORTE.OUTSET = (1<<3);
 		PORTE.DIRSET = (1<<3);
-		com_outer.usart().open(USARTE0, true);
+		com_outer.usart().open(USARTE0, (-1 << 12)|102 /*38400*/, true);
 
 		clock_t::init();
 
@@ -582,7 +582,7 @@ private:
 		{
 			m_app_com = &com;
 			pin_buf_txd::make_high();
-			com_app.usart().open(USARTC1, true);
+			com_app.usart().open(USARTC1, m_com_app_speed, true);
 			m_app_com_state = active;
 		}
 	}
@@ -677,6 +677,13 @@ private:
 						com.write(0x02);
 					}
 					break;
+				case 3:
+					// Set pipe speed
+					if (cp.size() == 5 && cp[2] == 1)
+					{
+						m_com_app_speed = cp[3] | (cp[4] << 8);
+						com_app.usart().set_speed(m_com_app_speed);
+					}
 				}
 			}
 
@@ -968,6 +975,7 @@ private:
 	enum { disabled, enabled, active } m_app_com_state, m_vccio_drive_state;
 
 	int16_t m_vccio_voltage;
+	uint16_t m_com_app_speed;
 };
 
 context_t ctx;
