@@ -121,7 +121,7 @@ uint8_t pdi_read(Pdi & pdi, R & r, Clock & clock, Process const & process)
 	{
 		while (!pdi.rx_ready())
 		{
-			if (clock.value() - t > 4000)
+			if (clock.value() - t > Clock::template us<4000>::value)
 			{
 				return 1;
 			}

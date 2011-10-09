@@ -96,7 +96,7 @@ public:
 		case st_disabled:
 			break;
 		case st_rst_disable:
-			if (m_clock.value() - m_time_base >= 8) // FIXME: time constants
+			if (m_clock.value() - m_time_base >= Clock::template us<8>::value) // FIXME: time constants
 			{
 				UBRR0H = 0;
 				UBRR0L = 10;
@@ -109,7 +109,7 @@ public:
 			}
 			break;
 		case st_wait_ticks:
-			if (m_clock.value() - m_time_base >= 64) // FIXME: time constants
+			if (m_clock.value() - m_time_base >= Clock::template us<64>::value) // FIXME: time constants
 			{
 				PdiData::output(false);
 				PdiData::clear();

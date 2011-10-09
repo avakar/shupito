@@ -44,16 +44,16 @@ public:
 
 			// Pull down the reset line and send "Programming enable" sequence
 			ResetPin::make_low();
-			wait(clock, 1000, m_process);
+			avrlib::wait(clock, Clock::template us<1000>::value, m_process);
 
 			ResetPin::set_value(true);
 			for (uint8_t i = 0; i < 3; ++i)
 			{
-				wait(clock, 1000, m_process);
+				avrlib::wait(clock, Clock::template us<1000>::value, m_process);
 				ResetPin::set_value(false);
 
 				// There has to be a 20ms delay on atmega128
-				wait(clock, 20, m_process);
+				avrlib::wait(clock, Clock::template us<20>::value, m_process);
 
 				spi.send(0xAC);
 				spi.send(0x53);
@@ -165,7 +165,7 @@ public:
 				spi.send(0);
 				spi.send(0);
 
-				wait(clock, 10000);
+				avrlib::wait(clock, Clock::template us<10000>::value);
 
 				com.write(0x80);
 				com.write(0x51);
@@ -226,7 +226,7 @@ public:
 						spi.send(cmds[m_mempage_ptr++ & 0x3]);
 						spi.send(0x00);
 						spi.send(cp[i]);
-						wait(clock, 5000);
+						avrlib::wait(clock, Clock::template us<5000>::value);
 					}
 				}
 				else
@@ -255,7 +255,7 @@ public:
 					spi.send(word_addr);
 					spi.send(0x00);
 				
-					wait(clock, 5000);
+					avrlib::wait(clock, Clock::template us<5000>::value);
 				}
 				else if (memid == 3)
 				{

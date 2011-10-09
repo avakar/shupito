@@ -50,7 +50,7 @@ public:
 					pdi_key(pdi, 0x1289AB45CDD888FFull);
 
 				uint8_t pdi_status = 0;
-				while (!error && (pdi_status & 0x02) == 0 && clock.value() - t < 100000)
+				while (!error && (pdi_status & 0x02) == 0 && clock.value() - t < Clock::template us<100000>::value)
 				{
 					pdi_ldcs(pdi, 0);
 					error = pdi_read(pdi, pdi_status, clock, process);
@@ -164,7 +164,7 @@ public:
 				pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x40);
 				pdi_sts(pdi, (uint32_t)0x010001CB, (uint8_t)0x01);
 
-				uint8_t error = pdi_wait_nvm_busy(pdi, clock, 50000, process);
+				uint8_t error = pdi_wait_nvm_busy(pdi, clock, Clock::template us<50000>::value, process);
 				if (error)
 					pdi.clear();
 
@@ -190,7 +190,7 @@ public:
 					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x26);
 					pdi_sts(pdi, (uint32_t)0x010001CB, (uint8_t)0x01);
 
-					error = pdi_wait_nvm_busy(pdi, clock, 10000, process);
+					error = pdi_wait_nvm_busy(pdi, clock, Clock::template us<10000>::value, process);
 					if (error)
 					{
 						pdi.clear();
@@ -240,7 +240,7 @@ public:
 						while (!pdi.tx_empty())
 							process();
 						pdi_sts(pdi, uint32_t(0x08F0020 | (m_fuse_address & 0x07)), cp[i]);
-						error = pdi_wait_nvm_busy(pdi, clock, 100000, process);
+						error = pdi_wait_nvm_busy(pdi, clock, Clock::template us<100000>::value, process);
 						if (error)
 							pdi.clear();
 						++m_fuse_address;
@@ -269,7 +269,7 @@ public:
 					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x2F);
 					pdi_sts(pdi, addr, (uint8_t)0);
 
-					error = pdi_wait_nvm_busy(pdi, clock, 50000, process);
+					error = pdi_wait_nvm_busy(pdi, clock, Clock::template us<50000>::value, process);
 					if (error)
 						pdi.clear();
 				}

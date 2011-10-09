@@ -24,20 +24,33 @@ typedef com_nested_t com_t;
 
 struct timer_xd0
 {
-	typedef uint16_t value_type;
-	static const uint8_t value_bits = 14;
-	static value_type value() { return TCD0.CNT >> 2; }
-	static void value(value_type v) { TCD0.CNT = v << 2; }
+	template <uint32_t v>
+	struct us { static const uint32_t value = (v + 7) >> 3; };
+
+	typedef uint16_t time_type;
+	static const uint8_t value_bits = 16;
+
+	static void init()
+	{
+		TCD0.INTCTRLA = TC_OVFINTLVL_LO_gc;
+		TCD0.CTRLA = TC_CLKSEL_DIV256_gc;
+	}
+
+	static time_type value() { return TCD0.CNT; }
+	static void value(time_type v) { TCD0.CNT = v; }
 	static bool overflow() { return (TCD0.INTFLAGS & TC0_OVFIF_bm) != 0; }
 	static void clear_overflow() { TCD0.INTFLAGS = TC0_OVFIF_bm; }
 	static void tov_interrupt(bool) {}
 	static void clock_source(avrlib::timer_clock_source) {}
 };
-typedef avrlib::counter<timer_xd0> clock_t;
+typedef timer_xd0 clock_t;
 clock_t clock;
+
+typedef avrlib::counter<timer_xd0> long_clock_t;
+long_clock_t long_clock;
 ISR(TCD0_OVF_vect)
 {
-	clock.tov_interrupt();
+	long_clock.tov_interrupt();
 }
 
 #define AVRLIB_MAKE_XMEGA_PIN(pin_name, port, pin) \
@@ -252,7 +265,7 @@ public:
 		case st_disabled:
 			break;
 		case st_rst_disable:
-			if (m_clock.value() - m_time_base >= 8) // FIXME: time constants
+			if (m_clock.value() - m_time_base >= Clock::template us<8>::value) // FIXME: time constants
 			{
 				USARTC0.BAUDCTRLA = 63;
 				USARTC0.BAUDCTRLB = 0;
@@ -262,11 +275,11 @@ public:
 				USARTC0.CTRLB = USART_TXEN_bm;
 
 				m_state = st_wait_ticks;
-				m_time_base += 8;
+				m_time_base += Clock::template us<8>::value;
 			}
 			break;
 		case st_wait_ticks:
-			if (m_clock.value() - m_time_base >= 128) // FIXME: time constants
+			if (m_clock.value() - m_time_base >= Clock::template us<128>::value) // FIXME: time constants
 			{
 				m_state = st_idle;
 				m_rx_count = 0;
@@ -280,7 +293,7 @@ public:
 			pin_led::set_value(true);
 			break;
 		case st_unrst:
-			if (m_clock.value() - m_time_base >= 16) // FIXME: time constants
+			if (m_clock.value() - m_time_base >= Clock::template us<16>::value) // FIXME: time constants
 			{
 				PdiClk::make_input();
 				PdiData::make_input();
@@ -374,7 +387,7 @@ class context_t
 public:
 	context_t()
 		: hxmega(pdi, clock, &process), havricsp(spi, clock, &process),
-		vdd_timeout(clock, 100000), usb_test_timeout(clock, 1000000), m_vccio_drive_check_timeout(clock, 200000),
+		vdd_timeout(clock, clock_t::us<100000>::value), usb_test_timeout(long_clock, long_clock_t::us<1000000>::value), m_vccio_drive_check_timeout(clock, clock_t::us<200000>::value),
 		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_com_state(enabled), m_vccio_drive_state(enabled),
 		m_vccio_voltage(0)
 	{
@@ -395,8 +408,7 @@ public:
 		PORTE.DIRSET = (1<<3);
 		com_outer.usart().open(USARTE0, true);
 
-		TCD0.INTCTRLA = TC_OVFINTLVL_LO_gc;
-		TCD0.CTRLA = TC_CLKSEL_DIV8_gc;
+		clock_t::init();
 
 		pin_buf_txd::init();
 		pin_buf_rst::init();
@@ -946,7 +958,7 @@ private:
 	handler_base<com_t> * handler;
 
 	avrlib::timeout<clock_t> vdd_timeout;
-	avrlib::timeout<clock_t> usb_test_timeout;
+	avrlib::timeout<long_clock_t> usb_test_timeout;
 	avrlib::timeout<clock_t> m_vccio_drive_check_timeout;
 
 	com_t * m_primary_com;
