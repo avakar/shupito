@@ -320,7 +320,7 @@ public:
 		m_tx_buffer.pop();
 		if (m_tx_buffer.empty())
 		{
-			USARTC0.CTRLA = USART_TXCINTLVL_MED_gc;
+			USARTC0.CTRLA = USART_TXCINTLVL_HI_gc;
 		}
 	}
 	
@@ -337,6 +337,7 @@ public:
 		else
 		{
 			m_state = st_idle;
+			USARTC0.CTRLA = 0;
 		}
 	}
 
@@ -394,7 +395,7 @@ public:
 		PORTE.DIRSET = (1<<3);
 		com_outer.usart().open(USARTE0, true);
 
-		TCD0.INTCTRLA = TC_OVFINTLVL_HI_gc;
+		TCD0.INTCTRLA = TC_OVFINTLVL_LO_gc;
 		TCD0.CTRLA = TC_CLKSEL_DIV8_gc;
 
 		pin_buf_txd::init();
