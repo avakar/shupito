@@ -12,13 +12,13 @@
 
 typedef avrlib::async_usart<avrlib::uart_xmega, 64, 64> com_nested_t;
 com_nested_t com_inner;
-ISR(USARTD1_RXC_vect) { com_inner.process_rx(); }
+ISR(USARTD1_RXC_vect) { com_inner.intr_rx(); }
 
 com_nested_t com_outer;
-ISR(USARTE0_RXC_vect) { com_outer.process_rx(); }
+ISR(USARTE0_RXC_vect) { com_outer.intr_rx(); }
 
 com_nested_t com_app;
-ISR(USARTC1_RXC_vect) { com_app.process_rx(); }
+ISR(USARTC1_RXC_vect) { com_app.intr_rx(); }
 
 typedef com_nested_t com_t;
 
