@@ -3,24 +3,42 @@
 #include "../fw_common/avrlib/command_parser.hpp"
 #include "../fw_common/avrlib/async_usart.hpp"
 #include "../fw_common/avrlib/bootseq.hpp"
-#include "../fw_common/avrlib/uart_xmega.hpp"
 #include "../fw_common/avrlib/counter.hpp"
 #include "../fw_common/avrlib/format.hpp"
+
+#include "../fw_common/avrlib/usart_xc1.hpp"
+#include "../fw_common/avrlib/usart_xd1.hpp"
+#include "../fw_common/avrlib/usart_xe0.hpp"
+
 
 #include "../fw_common/handler_avricsp.hpp"
 #include "../fw_common/handler_xmega.hpp"
 
-typedef avrlib::async_usart<avrlib::uart_xmega, 64, 64> com_nested_t;
-com_nested_t com_inner;
+typedef avrlib::async_usart<avrlib::usart_xd1, 64, 64> com_inner_t;
+com_inner_t com_inner;
 ISR(USARTD1_RXC_vect) { com_inner.intr_rx(); }
 
-com_nested_t com_outer;
+typedef avrlib::async_usart<avrlib::usart_xe0, 64, 64> com_outer_t;
+com_outer_t com_outer;
 ISR(USARTE0_RXC_vect) { com_outer.intr_rx(); }
 
-com_nested_t com_app;
+typedef avrlib::async_usart<avrlib::usart_xc1, 64, 64> com_app_t;
+com_app_t com_app;
 ISR(USARTC1_RXC_vect) { com_app.intr_rx(); }
 
-typedef com_nested_t com_t;
+struct com_writer_t {
+	virtual void write(uint8_t value) {}
+};
+
+struct com_inner_writer_t : com_writer_t
+{
+	virtual void write(uint8_t value) { com_inner.write(value); }
+} com_inner_writer;
+
+struct com_outer_writer_t : com_writer_t
+{
+	virtual void write(uint8_t value) { com_outer.write(value); }
+} com_outer_writer;
 
 struct timer_xd0
 {
@@ -401,12 +419,12 @@ public:
 		PORTD.OUTSET = (1<<7);
 		PORTD.OUTCLR = (1<<5);
 		PORTD.DIRSET = (1<<5)|(1<<7);
-		com_inner.usart().open(USARTD1, 416, true, true /*synchronous*/);
+		com_inner.usart().open(63, true, true /*synchronous*/);
 
 		PORTE.PIN2CTRL = PORT_OPC_PULLUP_gc;
 		PORTE.OUTSET = (1<<3);
 		PORTE.DIRSET = (1<<3);
-		com_outer.usart().open(USARTE0, (-1 << 12)|102 /*38400*/, true);
+		com_outer.usart().open((-1 << 12)|102 /*38400*/, true);
 
 		clock_t::init();
 
@@ -513,8 +531,8 @@ public:
 			if (ch != 255)
 			{
 				bootseq.check(ch);
-				if (!this->process_command(cp_outer, com_outer)
-					&& !process_tunnel(cp_outer, com_outer, false))
+				if (!this->process_command(cp_outer, com_outer_writer)
+					&& !process_tunnel(cp_outer, com_outer_writer, false))
 				{
 					cp_outer.clear();
 				}
@@ -526,8 +544,8 @@ public:
 			uint8_t ch = cp_inner.push_data(com_inner.read());
 			if (ch != 255)
 			{
-				if (!this->process_command(cp_inner, com_inner)
-					&& !process_tunnel(cp_inner, com_inner, true))
+				if (!this->process_command(cp_inner, com_inner_writer)
+					&& !process_tunnel(cp_inner, com_inner_writer, true))
 				{
 					cp_inner.clear();
 				}
@@ -567,7 +585,7 @@ public:
 	}
 
 private:
-	void activate_com_app(com_t & com)
+	void activate_com_app(com_writer_t & com)
 	{
 		if (m_app_com_state == disabled)
 			return;
@@ -582,12 +600,12 @@ private:
 		{
 			m_app_com = &com;
 			pin_buf_txd::make_high();
-			com_app.usart().open(USARTC1, m_com_app_speed, true);
+			com_app.usart().open(m_com_app_speed, true);
 			m_app_com_state = active;
 		}
 	}
 
-	void deactivate_com_app(com_t & com)
+	void deactivate_com_app(com_writer_t & com)
 	{
 		if (m_app_com_state != active)
 			return;
@@ -603,7 +621,7 @@ private:
 		com.write(0x01);
 	}
 
-	void send_pipe_list(com_t & com)
+	void send_pipe_list(com_writer_t & com)
 	{
 		com.write(0x80);
 		com.write(m_app_com_state != disabled? 0x96: 0x92);
@@ -618,7 +636,7 @@ private:
 		}
 	}
 
-	bool process_tunnel(avrlib::command_parser & cp, com_t & com, bool inner)
+	bool process_tunnel(avrlib::command_parser & cp, com_writer_t & com, bool inner)
 	{
 		switch (cp.command())
 		{
@@ -640,6 +658,7 @@ private:
 						com.write(0x01);
 						com.write(0x02);
 						inner_redirected = true;
+						com_inner.usart().set_speed(639);
 					}
 					else if (cp.size() == 5 && cp[2] == 'a' && cp[3] == 'p' && cp[4] == 'p' && m_app_com_state != disabled)
 					{
@@ -664,6 +683,7 @@ private:
 						com.write(0x02);
 						com.write(0x02);
 						inner_redirected = false;
+						com_inner.usart().set_speed(63);
 					}
 					else if (cp.size() == 3 && cp[2] == 1)
 					{
@@ -705,7 +725,7 @@ private:
 		return false;
 	}
 
-	void send_vccio_state(com_t * pCom)
+	void send_vccio_state(com_writer_t * pCom)
 	{
 		if (!pCom)
 			return;
@@ -717,7 +737,7 @@ private:
 		pCom->write(pin_ext_sup::get_value());
 	}
 
-	void set_vccio_drive(uint8_t value, com_t * pCom)
+	void set_vccio_drive(uint8_t value, com_writer_t * pCom)
 	{
 		if (value == 1 && m_vccio_drive_state != disabled)
 		{
@@ -735,7 +755,7 @@ private:
 		this->send_vccio_state(pCom);
 	}
 
-	void send_vccio_drive_list(com_t & com)
+	void send_vccio_drive_list(com_writer_t & com)
 	{
 		com.write(0x80);
 		com.write(m_vccio_drive_state != disabled? 0xaa: 0xa6);
@@ -755,7 +775,7 @@ private:
 		}
 	}
 
-	bool process_command(avrlib::command_parser & cp, com_t & com)
+	bool process_command(avrlib::command_parser & cp, com_writer_t & com)
 	{
 		switch (cp.command())
 		{
@@ -927,7 +947,7 @@ private:
 	enum handler_t { handler_none, handler_spi, handler_pdi };
 	uint8_t select_handler(handler_t h)
 	{
-		handler_base<com_t> * new_handler;
+		handler_base<com_writer_t> * new_handler;
 		switch (h)
 		{
 		case handler_spi:
@@ -960,17 +980,17 @@ private:
 	avrlib::bootseq bootseq;
 	avrlib::command_parser cp_outer, cp_inner;
 
-	handler_xmega<my_pdi_t, com_t, clock_t, void (*)()> hxmega;
-	handler_avricsp<spi_t, com_t, clock_t, pin_buf_rst, void (*)()> havricsp;
-	handler_base<com_t> * handler;
+	handler_xmega<my_pdi_t, com_writer_t, clock_t, void (*)()> hxmega;
+	handler_avricsp<spi_t, com_writer_t, clock_t, pin_buf_rst, void (*)()> havricsp;
+	handler_base<com_writer_t> * handler;
 
 	avrlib::timeout<clock_t> vdd_timeout;
 	avrlib::timeout<long_clock_t> usb_test_timeout;
 	avrlib::timeout<clock_t> m_vccio_drive_check_timeout;
 
-	com_t * m_primary_com;
-	com_t * m_vdd_com;
-	com_t * m_app_com;
+	com_writer_t * m_primary_com;
+	com_writer_t * m_vdd_com;
+	com_writer_t * m_app_com;
 
 	enum { disabled, enabled, active } m_app_com_state, m_vccio_drive_state;
 
