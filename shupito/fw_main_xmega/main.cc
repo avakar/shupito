@@ -79,8 +79,13 @@ ISR(TCD0_OVF_vect)
 		static void make_low() { port.OUTCLR = (1<<(pin)); port.DIRSET = (1<<(pin)); } \
 		static void make_output() { port.DIRSET = (1<<(pin)); } \
 		static void set_value(uint8_t value) { if (value) port.OUTSET = (1<<(pin)); else port.OUTCLR = (1<<(pin)); } \
+		static void set_high() { port.OUTSET = (1<<(pin)); } \
+		static void set_low() { port.OUTCLR = (1<<(pin)); } \
 		static uint8_t get_value() { return (port.OUT & (1<<(pin))) != 0; } \
 		static void toggle() { port.OUTTGL = (1<<(pin)); } \
+		static void pullup() { port.PIN##pin##CTRL = (port.PIN##pin##CTRL & ~PORT_OPC_gm) | PORT_OPC_PULLUP_gc; } \
+		static void pulldown() { port.PIN##pin##CTRL = (port.PIN##pin##CTRL & ~PORT_OPC_gm) | PORT_OPC_PULLDOWN_gc; } \
+		static void totem() { port.PIN##pin##CTRL = (port.PIN##pin##CTRL & ~PORT_OPC_gm) | PORT_OPC_TOTEM_gc; } \
 	}
 
 AVRLIB_MAKE_XMEGA_PIN(pin_ext_sup, PORTB, 2);
@@ -97,8 +102,14 @@ AVRLIB_MAKE_XMEGA_PIN(pin_rxd,  PORTC, 6);
 AVRLIB_MAKE_XMEGA_PIN(pin_txd,  PORTC, 7);
 AVRLIB_MAKE_XMEGA_PIN(pin_txdd, PORTD, 2);
 
-AVRLIB_MAKE_XMEGA_PIN(pin_usb_rx, PORTD, 6);
-AVRLIB_MAKE_XMEGA_PIN(pin_usb_tx, PORTD, 7);
+AVRLIB_MAKE_XMEGA_PIN(pin_usb_rtr_n, PORTD, 3);
+AVRLIB_MAKE_XMEGA_PIN(pin_usb_cts_n, PORTD, 4);
+AVRLIB_MAKE_XMEGA_PIN(pin_usb_xck,   PORTD, 5);
+AVRLIB_MAKE_XMEGA_PIN(pin_usb_rx,    PORTD, 6);
+AVRLIB_MAKE_XMEGA_PIN(pin_usb_tx,    PORTD, 7);
+
+AVRLIB_MAKE_XMEGA_PIN(pin_bt_rx, PORTE, 2);
+AVRLIB_MAKE_XMEGA_PIN(pin_bt_tx, PORTE, 3);
 
 template <typename ValuePin, typename OePin>
 struct pin_buffer_with_oe
@@ -415,15 +426,15 @@ public:
 
 	void init()
 	{
-		PORTD.PIN6CTRL = PORT_OPC_PULLUP_gc;
-		PORTD.OUTSET = (1<<7);
-		PORTD.OUTCLR = (1<<5);
-		PORTD.DIRSET = (1<<5)|(1<<7);
+		pin_usb_xck::make_low();
+		pin_usb_tx::make_high();
+		pin_usb_rx::pullup();
+		pin_usb_cts_n::pulldown();
+		pin_usb_rtr_n::make_low();
 		com_inner.usart().open(63, true, true /*synchronous*/);
 
-		PORTE.PIN2CTRL = PORT_OPC_PULLUP_gc;
-		PORTE.OUTSET = (1<<3);
-		PORTE.DIRSET = (1<<3);
+		pin_bt_rx::pullup();
+		pin_bt_tx::make_high();
 		com_outer.usart().open((-1 << 12)|102 /*38400*/, true);
 
 		clock_t::init();
