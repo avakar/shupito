@@ -355,6 +355,7 @@ int main()
 	clock.enable(avrlib::timer_fosc_8);
 
 	com.usart().open_sync_slave(true);
+	UCSR1D = (1<<CTSEN)|(1<<RTSEN);
 
 	usb_t<com_t> usb(com);
 	usb.init();

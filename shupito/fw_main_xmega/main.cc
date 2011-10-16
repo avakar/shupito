@@ -2,6 +2,7 @@
 #include <avr/interrupt.h>
 #include "../fw_common/avrlib/command_parser.hpp"
 #include "../fw_common/avrlib/async_usart.hpp"
+#include "../fw_common/avrlib/hwflow_usart.hpp"
 #include "../fw_common/avrlib/bootseq.hpp"
 #include "../fw_common/avrlib/counter.hpp"
 #include "../fw_common/avrlib/format.hpp"
@@ -13,32 +14,6 @@
 
 #include "../fw_common/handler_avricsp.hpp"
 #include "../fw_common/handler_xmega.hpp"
-
-typedef avrlib::async_usart<avrlib::usart_xd1, 64, 64> com_inner_t;
-com_inner_t com_inner;
-ISR(USARTD1_RXC_vect) { com_inner.intr_rx(); }
-
-typedef avrlib::async_usart<avrlib::usart_xe0, 64, 64> com_outer_t;
-com_outer_t com_outer;
-ISR(USARTE0_RXC_vect) { com_outer.intr_rx(); }
-
-typedef avrlib::async_usart<avrlib::usart_xc1, 64, 64> com_app_t;
-com_app_t com_app;
-ISR(USARTC1_RXC_vect) { com_app.intr_rx(); }
-
-struct com_writer_t {
-	virtual void write(uint8_t value) {}
-};
-
-struct com_inner_writer_t : com_writer_t
-{
-	virtual void write(uint8_t value) { com_inner.write(value); }
-} com_inner_writer;
-
-struct com_outer_writer_t : com_writer_t
-{
-	virtual void write(uint8_t value) { com_outer.write(value); }
-} com_outer_writer;
 
 struct timer_xd0
 {
@@ -89,7 +64,7 @@ ISR(TCD0_OVF_vect)
 	}
 
 AVRLIB_MAKE_XMEGA_PIN(pin_ext_sup, PORTB, 2);
-AVRLIB_MAKE_XMEGA_PIN(pin_led,     PORTD, 3);
+AVRLIB_MAKE_XMEGA_PIN(pin_led,     PORTA, 2);
 
 AVRLIB_MAKE_XMEGA_PIN(pin_pdid, PORTD, 1);
 AVRLIB_MAKE_XMEGA_PIN(pin_rstd, PORTD, 0);
@@ -161,6 +136,32 @@ typedef pin_buffer_with_oe<pin_rst, pin_rstd> pin_buf_rst;
 typedef pin_buffer_with_oe<pin_pdi, pin_pdid> pin_buf_pdi;
 typedef pin_buffer_with_oe<pin_xck, pin_pdid> pin_buf_xck;
 typedef pin_rxd pin_buf_rxd;
+
+typedef avrlib::hwflow_usart<avrlib::usart_xd1, 64, 64, avrlib::intr_med, pin_usb_rtr_n, pin_usb_cts_n> com_inner_t;
+com_inner_t com_inner;
+ISR(USARTD1_RXC_vect) { com_inner.intr_rx(); }
+
+typedef avrlib::async_usart<avrlib::usart_xe0, 64, 64> com_outer_t;
+com_outer_t com_outer;
+ISR(USARTE0_RXC_vect) { com_outer.intr_rx(); }
+
+typedef avrlib::async_usart<avrlib::usart_xc1, 64, 64> com_app_t;
+com_app_t com_app;
+ISR(USARTC1_RXC_vect) { com_app.intr_rx(); }
+
+struct com_writer_t {
+	virtual void write(uint8_t value) {}
+};
+
+struct com_inner_writer_t : com_writer_t
+{
+	virtual void write(uint8_t value) { com_inner.write(value); }
+} com_inner_writer;
+
+struct com_outer_writer_t : com_writer_t
+{
+	virtual void write(uint8_t value) { com_outer.write(value); }
+} com_outer_writer;
 
 void avrlib::assertion_failed(char const * message, char const * file, int line)
 {	
