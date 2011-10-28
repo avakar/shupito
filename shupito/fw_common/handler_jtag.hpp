@@ -129,24 +129,54 @@ struct handler_jtagg
 private:
 	static void nop()
 	{
-		asm volatile ("nop");
+		asm __volatile__ ("nop");
 	}
 
-	void tick()
+	static void clock_wait()
 	{
 		nop();
 		nop();
 		nop();
 		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+	}
+
+	void tick()
+	{
+		clock_wait();
 		pin_tck::set_high();
 	}
 
 	void tock()
 	{
-		nop();
-		nop();
-		nop();
-		nop();
+		clock_wait();
 		pin_tck::set_low();
 	}
 
