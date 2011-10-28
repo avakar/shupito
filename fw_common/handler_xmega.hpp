@@ -13,7 +13,7 @@ public:
 	typedef Clock clock_t;
 	typedef Com com_t;
 
-	handler_xmega(pdi_t & pdi, clock_t & clock, Process process)
+	handler_xmega(pdi_t & pdi, clock_t & clock, Process process = Process())
 		: pdi(pdi), clock(clock), m_fuse_address(0), process(process)
 	{
 	}

@@ -1,22 +1,22 @@
-#include "../fw_common/avrlib/async_usart.hpp"
-#include "../fw_common/avrlib/bootseq.hpp"
-#include "../fw_common/avrlib/usart1.hpp"
+#include "../../fw_common/avrlib/async_usart.hpp"
+#include "../../fw_common/avrlib/bootseq.hpp"
+#include "../../fw_common/avrlib/usart1.hpp"
 
-#include "../fw_common/avrlib/timer1.hpp"
-#include "../fw_common/avrlib/counter.hpp"
-#include "../fw_common/avrlib/stopwatch.hpp"
-#include "../fw_common/avrlib/format.hpp"
+#include "../../fw_common/avrlib/timer1.hpp"
+#include "../../fw_common/avrlib/counter.hpp"
+#include "../../fw_common/avrlib/stopwatch.hpp"
+#include "../../fw_common/avrlib/format.hpp"
 
-#include "../fw_common/avrlib/buffer.hpp"
-#include "../fw_common/avrlib/pin.hpp"
-#include "../fw_common/avrlib/portd.hpp"
-#include "../fw_common/avrlib/assert.hpp"
+#include "../../fw_common/avrlib/buffer.hpp"
+#include "../../fw_common/avrlib/pin.hpp"
+#include "../../fw_common/avrlib/portd.hpp"
+#include "../../fw_common/avrlib/assert.hpp"
 
-#include "../fw_common/avrlib/command_parser.hpp"
+#include "../../fw_common/avrlib/command_parser.hpp"
 
-#include "../fw_common/handler_base.hpp"
-#include "../fw_common/handler_xmega.hpp"
-#include "../fw_common/handler_avricsp.hpp"
+#include "../../fw_common/handler_base.hpp"
+#include "../../fw_common/handler_xmega.hpp"
+#include "../../fw_common/handler_avricsp.hpp"
 
 #include "pdi.hpp"
 #include "spi.hpp"
@@ -34,7 +34,14 @@ ISR(USART1_RXC_vect)
 	com.process_rx();
 }
 
-typedef avrlib::counter<avrlib::timer1> clock_t;
+struct timer_t
+	: avrlib::timer1
+{
+	template <uint32_t v>
+	struct us { static const uint32_t value = v; };
+};
+
+typedef avrlib::counter<timer_t> clock_t;
 clock_t clock;
 
 ISR(TIMER1_OVF_vect)
@@ -61,11 +68,14 @@ ISR(USART0_TXC_vect)
 
 spi_t spi;
 
-void process()
+struct process_t
 {
-	pdi.process();
-	com.process_tx();
-}
+	void operator()() const
+	{
+		pdi.process();
+		com.process_tx();
+	}
+} process;
 
 void send_dword(uint32_t v)
 {
@@ -85,9 +95,9 @@ int main()
 	avrlib::command_parser cp;
 	cp.clear();
 
-	handler_xmega<pdi_t<clock_t, pdi_clk, pdi_data>, com_t, clock_t> hxmega(pdi, com, clock);
-	handler_avricsp<spi_t, com_t, clock_t, avricsp_reset> havricsp(spi, com, clock);
-	handler_base * handler = 0;
+	handler_xmega<pdi_t<clock_t, pdi_clk, pdi_data>, com_t, clock_t, process_t> hxmega(pdi, clock);
+	handler_avricsp<spi_t, com_t, clock_t, avricsp_reset, process_t> havricsp(spi, clock);
+	handler_base<com_t> * handler = 0;
 
 	for (;;)
 	{
@@ -130,7 +140,7 @@ int main()
 					case 3: // Select a function into the current slot
 						if (cp.size() > 1)
 						{
-							handler_base * new_handler = 0;
+							handler_base<com_t> * new_handler = 0;
 							uint8_t err = 0;
 							switch (cp[1])
 							{
@@ -183,7 +193,7 @@ int main()
 				if (ch > 16)
 					cp.clear();
 				else if (handler)
-					handler->handle_command(cp);
+					handler->handle_command(cp, com);
 			}
 		}
 

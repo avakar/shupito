@@ -85,7 +85,7 @@ public:
 
 	void init()
 	{
-		com.usart().open(avrlib::ubrr<38400>::value, true);
+		com.usart().open_ubrr(avrlib::ubrr<38400>::value, true);
 
 		clock_t::init();
 		m_cp.clear();

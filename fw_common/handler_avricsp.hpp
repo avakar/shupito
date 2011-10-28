@@ -14,7 +14,7 @@ public:
 	typedef Com com_t;
 	typedef Clock clock_t;
 
-	handler_avricsp(spi_t & spi, clock_t & clock, Process process)
+	handler_avricsp(spi_t & spi, clock_t & clock, Process process = Process())
 		: spi(spi), clock(clock), m_programming_enabled(false), m_process(process)
 	{
 	}
