@@ -1,20 +1,20 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
-#include "../fw_common/avrlib/command_parser.hpp"
-#include "../fw_common/avrlib/async_usart.hpp"
-#include "../fw_common/avrlib/hwflow_usart.hpp"
-#include "../fw_common/avrlib/bootseq.hpp"
-#include "../fw_common/avrlib/counter.hpp"
-#include "../fw_common/avrlib/format.hpp"
+#include "../../fw_common/avrlib/command_parser.hpp"
+#include "../../fw_common/avrlib/async_usart.hpp"
+#include "../../fw_common/avrlib/hwflow_usart.hpp"
+#include "../../fw_common/avrlib/bootseq.hpp"
+#include "../../fw_common/avrlib/counter.hpp"
+#include "../../fw_common/avrlib/format.hpp"
 
-#include "../fw_common/avrlib/usart_xc1.hpp"
-#include "../fw_common/avrlib/usart_xd1.hpp"
-#include "../fw_common/avrlib/usart_xe0.hpp"
+#include "../../fw_common/avrlib/usart_xc1.hpp"
+#include "../../fw_common/avrlib/usart_xd1.hpp"
+#include "../../fw_common/avrlib/usart_xe0.hpp"
 
 
-#include "../fw_common/handler_avricsp.hpp"
-#include "../fw_common/handler_xmega.hpp"
-#include "../fw_common/handler_jtag.hpp"
+#include "../../fw_common/handler_avricsp.hpp"
+#include "../../fw_common/handler_xmega.hpp"
+#include "../../fw_common/handler_jtag.hpp"
 
 struct timer_xd0
 {

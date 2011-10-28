@@ -3,12 +3,12 @@
 
 #include <avr/pgmspace.h>
 
-#include "../fw_common/avrlib/async_usart.hpp"
-#include "../fw_common/avrlib/usart1.hpp"
-#include "../fw_common/avrlib/format.hpp"
-#include "../fw_common/avrlib/bootseq.hpp"
-#include "../fw_common/avrlib/counter.hpp"
-#include "../fw_common/avrlib/timer1.hpp"
+#include "../../fw_common/avrlib/async_usart.hpp"
+#include "../../fw_common/avrlib/usart1.hpp"
+#include "../../fw_common/avrlib/format.hpp"
+#include "../../fw_common/avrlib/bootseq.hpp"
+#include "../../fw_common/avrlib/counter.hpp"
+#include "../../fw_common/avrlib/timer1.hpp"
 
 typedef avrlib::async_usart<avrlib::usart1, 64, 64, avrlib::bootseq> com_t;
 com_t com;
