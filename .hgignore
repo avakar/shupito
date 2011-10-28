@@ -6,6 +6,7 @@ eagle.epf
 **.sdf
 **.suo
 **.user
+**.avrsuo
 ipch
 Debug
 Release
