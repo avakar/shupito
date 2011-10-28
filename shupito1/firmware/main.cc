@@ -85,6 +85,10 @@ void send_dword(uint32_t v)
 	com.write(v >> 24);
 }
 
+static uint8_t const device_descriptor[] PROGMEM = {
+#include "desc.h"
+};
+
 int main()
 {
 	sei();
@@ -109,82 +113,76 @@ int main()
 			switch (ch)
 			{
 			case 0:
-				if (cp.size() == 0 || cp[0] == 0)
+				if (cp.size() == 0)
+					break;
+
+				switch (cp[0])
 				{
-					// Send out the identification
-					com.write(0x80);
-					com.write(0x05);
-					com.write(0x40);
-					com.write(0xbd);
-					com.write(0xe9);
-					com.write(0x9f);
-					com.write(0xea);
-				}
-				else
-				{
-					switch (cp[0])
+				case 0:
 					{
-					case 1: // Get slot count
-						com.write(0x80);
-						com.write(0x02);
-						com.write(0x41);
-						com.write(0x01);
-						break;
-					case 2: // List functions available for on the current slot.
-						com.write(0x80);
-						com.write(0x09);
-						com.write(0x42);
-						send_dword(0x871e0846/*avr*/);
-						send_dword(0xc2a4dd67/*avrx*/);
-						break;
-					case 3: // Select a function into the current slot
-						if (cp.size() > 1)
-						{
-							handler_base<com_t> * new_handler = 0;
-							uint8_t err = 0;
-							switch (cp[1])
-							{
-							case 1:
-								new_handler = &havricsp;
-								break;
-							case 2:
-								new_handler = &hxmega;
-								break;
-							case 0:
-								break;
-							default:
-								err = 1;
-							}
+						// Send the device descriptor
+						uint8_t const * PROGMEM ptr = device_descriptor;
+						uint8_t size = sizeof device_descriptor;
 
-							if (!err && handler != new_handler)
-							{
-								if (handler)
-									handler->unselect();
-								if (new_handler)
-									err = new_handler->select();
-								handler = (err == 0? new_handler: 0);
-							}
-							com.write(0x80);
-							com.write(0x02);
-							com.write(0x43);
-							com.write(err);
-						}
-						break;
-					case 4: // Get selected function.
+						for (;;)
 						{
-							uint32_t res = 0;
-							if (handler == &havricsp)
-								res = 0x871e0846;
-							if (handler == &hxmega)
-								res = 0xc2a4dd67;
+							uint8_t chunk = 15;
+							if (size < chunk)
+								chunk = (uint8_t)size;
+							size -= chunk;
 
 							com.write(0x80);
-							com.write(0x05);
-							com.write(0x44);
-							send_dword(res);
+							com.write(chunk);
+							for (uint8_t i = chunk; i != 0; --i)
+								com.write(pgm_read_byte(ptr++));
+
+							if (chunk < 15)
+								break;
 						}
-						break;
 					}
+					break;
+				case 1:
+					// Enable interface
+					{
+						handler_base<com_t> * new_handler;
+						uint8_t err = 1;
+
+						switch (cp[1])
+						{
+						case 0:
+							new_handler = &havricsp;
+							break;
+						case 1:
+							new_handler = &hxmega;
+							break;
+						}
+
+						if (!err && handler != new_handler)
+						{
+							if (handler)
+								handler->unselect();
+							if (new_handler)
+								err = new_handler->select();
+							handler = (err == 0? new_handler: 0);
+						}
+
+						com.write(0x80);
+						com.write(0x01);
+						com.write(err);
+					}
+					break;
+				case 2:
+					// Disable interface
+					{
+						if (handler)
+							handler->unselect();
+						handler = 0;
+
+						com.write(0x80);
+						com.write(0x01);
+						com.write(0x00);
+					}
+					break;
 				}
 				break;
 			case 255:
