@@ -52,7 +52,9 @@ open('desc.h', 'w').write(to_c(adler16(make_descriptor(UUID('093d7f32-cdc6-4928-
     And(
         Or(
             Config(UUID('46dbc865-b4d0-466b-9b70-2f3f5b264e65'), 1, 8), # SPI
-            Config(UUID('71efb903-3030-4fd3-8896-1946aba37efc'), 1, 8)  # PDI
+            Config(UUID('71efb903-3030-4fd3-8896-1946aba37efc'), 1, 8), # PDI
+            Config(UUID('ee047e35-dec8-48ab-b194-e3762c8f6b66'), 1, 2,  # JTAG
+                data=struct.pack('<BI', 1, 32000000))
         ),
         Config(UUID('356e9bf7-8718-4965-94a4-0be370c8797c'), 9, 1, flags=0x03,   # tunnel
             data=struct.pack('<BI', 1, 2000000)),

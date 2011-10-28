@@ -12,6 +12,7 @@ struct handler_base
 	virtual error_t select() { return 0; }
 	virtual void unselect() {}
 	virtual bool handle_command(avrlib::command_parser & cp, com_t & com) { return false; }
+	virtual void process_selected() {}
 };
 
 #endif

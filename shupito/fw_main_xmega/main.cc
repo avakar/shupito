@@ -14,6 +14,7 @@
 
 #include "../fw_common/handler_avricsp.hpp"
 #include "../fw_common/handler_xmega.hpp"
+#include "../fw_common/handler_jtag.hpp"
 
 struct timer_xd0
 {
@@ -25,7 +26,7 @@ struct timer_xd0
 
 	static void init()
 	{
-		TCD0.INTCTRLA = TC_OVFINTLVL_LO_gc;
+		//TCD0.INTCTRLA = TC_OVFINTLVL_LO_gc;
 		TCD0.CTRLA = TC_CLKSEL_DIV256_gc;
 	}
 
@@ -38,13 +39,6 @@ struct timer_xd0
 };
 typedef timer_xd0 clock_t;
 clock_t clock;
-
-typedef avrlib::counter<timer_xd0> long_clock_t;
-long_clock_t long_clock;
-ISR(TCD0_OVF_vect)
-{
-	long_clock.tov_interrupt();
-}
 
 #define AVRLIB_MAKE_XMEGA_PIN(pin_name, port, pin) \
 	struct pin_name \
@@ -61,6 +55,7 @@ ISR(TCD0_OVF_vect)
 		static void pullup() { port.PIN##pin##CTRL = (port.PIN##pin##CTRL & ~PORT_OPC_gm) | PORT_OPC_PULLUP_gc; } \
 		static void pulldown() { port.PIN##pin##CTRL = (port.PIN##pin##CTRL & ~PORT_OPC_gm) | PORT_OPC_PULLDOWN_gc; } \
 		static void totem() { port.PIN##pin##CTRL = (port.PIN##pin##CTRL & ~PORT_OPC_gm) | PORT_OPC_TOTEM_gc; } \
+		static bool read() { return (port.IN & (1<<(pin))) != 0; } \
 	}
 
 AVRLIB_MAKE_XMEGA_PIN(pin_ext_sup, PORTB, 2);
@@ -128,6 +123,21 @@ struct pin_buffer_with_oe
 	static void set_value(uint8_t value)
 	{
 		ValuePin::set_value(value);
+	}
+
+	static void set_high()
+	{
+		ValuePin::set_high();
+	}
+
+	static void set_low()
+	{
+		ValuePin::set_low();
+	}
+
+	static bool read()
+	{
+		return ValuePin::read();
 	}
 };
 
@@ -417,11 +427,10 @@ class context_t
 public:
 	context_t()
 		: hxmega(pdi, clock, &process), havricsp(spi, clock, &process),
-		vdd_timeout(clock, clock_t::us<100000>::value), usb_test_timeout(long_clock, long_clock_t::us<1000000>::value), m_vccio_drive_check_timeout(clock, clock_t::us<200000>::value),
+		vdd_timeout(clock, clock_t::us<100000>::value), m_vccio_drive_check_timeout(clock, clock_t::us<200000>::value),
 		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_com_state(enabled), m_vccio_drive_state(enabled),
 		m_vccio_voltage(0), m_com_app_speed((-1 << 12)|102 /*38400*/)
 	{
-		usb_test_timeout.cancel();
 		m_vccio_drive_check_timeout.cancel();
 	}
 
@@ -564,12 +573,8 @@ public:
 			}
 		}
 
-		if (usb_test_timeout)
-		{
-			usb_test_timeout.ack();
-			if (!inner_redirected)
-				avrlib::send(com_inner, "A really long string that we need to get through USB unmangled.\n");
-		}
+		if (handler)
+			handler->process_selected();
 
 		process();
 	}
@@ -835,6 +840,9 @@ private:
 						case 1:
 							err = this->select_handler(handler_pdi);
 							break;
+						case 2:
+							err = this->select_handler(handler_jtag);
+							break;
 						}
 
 						if (err == 0)
@@ -927,14 +935,6 @@ private:
 			avrlib::format(com, "clock: %x\n") % clock.value();
 			cp.clear();
 			return true;
-		case 'u':
-			usb_test_timeout.restart();
-			cp.clear();
-			return true;
-		case 'U':
-			usb_test_timeout.cancel();
-			cp.clear();
-			return true;
 		case 'm':
 			vdd_timeout.start();
 			cp.clear();
@@ -956,7 +956,7 @@ private:
 		return false;
 	}
 
-	enum handler_t { handler_none, handler_spi, handler_pdi };
+	enum handler_t { handler_none, handler_spi, handler_pdi, handler_jtag };
 	uint8_t select_handler(handler_t h)
 	{
 		handler_base<com_writer_t> * new_handler;
@@ -967,6 +967,9 @@ private:
 			break;
 		case handler_pdi:
 			new_handler = &hxmega;
+			break;
+		case handler_jtag:
+			new_handler = &hjtag;
 			break;
 		default:
 			new_handler = 0;
@@ -994,10 +997,10 @@ private:
 
 	handler_xmega<my_pdi_t, com_writer_t, clock_t, void (*)()> hxmega;
 	handler_avricsp<spi_t, com_writer_t, clock_t, pin_buf_rst, void (*)()> havricsp;
+	handler_jtagg<com_writer_t, pin_buf_rst, pin_buf_xck, pin_buf_rxd, pin_buf_txd> hjtag;
 	handler_base<com_writer_t> * handler;
 
 	avrlib::timeout<clock_t> vdd_timeout;
-	avrlib::timeout<long_clock_t> usb_test_timeout;
 	avrlib::timeout<clock_t> m_vccio_drive_check_timeout;
 
 	com_writer_t * m_primary_com;

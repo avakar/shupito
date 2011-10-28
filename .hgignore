@@ -9,3 +9,5 @@ eagle.epf
 ipch
 Debug
 Release
+shupito\fw_main_xmega\default
+shupito\usb_fw\default
