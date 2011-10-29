@@ -1,0 +1,38 @@
+Partlist
+
+Exported from shupito.sch at 10/29/2011 5:10:20 PM
+
+EAGLE Version 5.11.0 Copyright (c) 1988-2010 CadSoft
+
+Count    Value             Package     
+
+7        100n              C0603       
+2        18p               C0603       
+3        10n               C0603       
+1        2.2u              C1206       
+1        4.7u              C1206       
+1        10u-1759434       C1206       
+1        68u-1672624       C/6032-28R  
+2        BAT42WS-1621831   SOD323      
+2        PMEG2005-1757760  SOD323      
+1        AVR_XMEGA_A4_44A  TQFP44      
+4        74LVC1T45         SOT236      
+1        ATMEGA8U2         TQFP32-08   
+1        TPS73033DBV       SOT23-DBV   
+1        NCP1400A          SOT23-DBV   
+JP1      PINH2X07SMD       PINH1X01SMD 
+JP2      PINH2X04SMD       PINH1X01SMD 
+1        100nH             R0603       
+1        22u-1782802       1515        
+1        ORANGE-8554552    CHIPLED_0603
+2        BC807W-1907646    SOT323-BEC  
+1        NX2301P-1894738   SOT23       
+2        PDTC123YU-1757992 SOT323      
+13       100               R0603       
+2        22                R0603       
+1        6k8               R0603       
+8        470k              R0603       
+2        1k5               R0603       
+3        6k8               R0603       
+1                          USB-MB-S    
+1        ABMM2-8MHz        6X3.6_LARGE 
