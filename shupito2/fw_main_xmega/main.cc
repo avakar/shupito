@@ -410,13 +410,16 @@ ISR(USARTC0_DRE_vect) { pdi.intr_udre(); }
 ISR(USARTC0_TXC_vect) { pdi.intr_txc(); }
 ISR(USARTC0_RXC_vect) { pdi.intr_rxc(); }
 
-void process()
+struct process_t
 {
-	pdi.process();
-	com_inner.process_tx();
-	com_outer.process_tx();
-	com_app.process_tx();
-}
+	void operator()() const
+	{
+		pdi.process();
+		com_inner.process_tx();
+		com_outer.process_tx();
+		com_app.process_tx();
+	}
+} process;
 
 static uint8_t const device_descriptor[] PROGMEM = {
 #include "desc.h"
@@ -426,7 +429,7 @@ class context_t
 {
 public:
 	context_t()
-		: hxmega(pdi, clock, &process), havricsp(spi, clock, &process),
+		: hxmega(pdi, clock), havricsp(spi, clock),
 		vdd_timeout(clock, clock_t::us<100000>::value), m_vccio_drive_check_timeout(clock, clock_t::us<200000>::value),
 		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_com_state(enabled), m_vccio_drive_state(enabled),
 		m_vccio_voltage(0), m_com_app_speed((-1 << 12)|102 /*38400*/)
@@ -995,9 +998,9 @@ private:
 	avrlib::bootseq bootseq;
 	avrlib::command_parser cp_outer, cp_inner;
 
-	handler_xmega<my_pdi_t, com_writer_t, clock_t, void (*)()> hxmega;
-	handler_avricsp<spi_t, com_writer_t, clock_t, pin_buf_rst, void (*)()> havricsp;
-	handler_jtagg<com_writer_t, pin_buf_rst, pin_buf_xck, pin_buf_rxd, pin_buf_txd> hjtag;
+	handler_xmega<my_pdi_t, com_writer_t, clock_t, process_t> hxmega;
+	handler_avricsp<spi_t, com_writer_t, clock_t, pin_buf_rst, process_t> havricsp;
+	handler_jtagg<com_writer_t, pin_buf_rst, pin_buf_xck, pin_buf_rxd, pin_buf_txd, process_t> hjtag;
 	handler_base<com_writer_t> * handler;
 
 	avrlib::timeout<clock_t> vdd_timeout;

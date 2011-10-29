@@ -3,7 +3,7 @@
 
 #include "handler_base.hpp"
 
-template <typename Com, typename PinRst, typename PinClk, typename PinRx, typename PinTx>
+template <typename Com, typename PinRst, typename PinClk, typename PinRx, typename PinTx, typename Process>
 struct handler_jtagg
 	: handler_base<Com>
 {
@@ -11,6 +11,11 @@ struct handler_jtagg
 	typedef PinClk pin_tck;
 	typedef PinRx  pin_tdo;
 	typedef PinTx  pin_tdi;
+
+	handler_jtagg(Process process = Process())
+		: m_process(process)
+	{
+	}
 
 	bool handle_command(avrlib::command_parser & cp, Com & com)
 	{
@@ -46,7 +51,7 @@ struct handler_jtagg
 			}
 			return true;
 		case 2: // SHIFT 8'length length'data
-			if (cp.size() > 1 && cp[0] < 8*14)
+			if (cp.size() > 1 && cp[0] <= 8*14)
 			{
 				uint8_t length = cp[0];
 
@@ -75,24 +80,21 @@ struct handler_jtagg
 					uint8_t tdo = 0;
 					for (; chunk; --chunk)
 					{
-						tdo = (tdo >> 1);
-						if (pin_tdo::read())
-							tdo |= 0x80;
 						tock();
 						pin_tdi::set_value(val & 1);
-						if (!length && chunk == 0)
+						if (!length && chunk == 1)
 							pin_tms::set_high();
 						val >>= 1;
 						tick();
+						tdo = (tdo >> 1);
+						if (pin_tdo::read())
+							tdo |= 0x80;
 					}
 
 					com.write(tdo);
 				}
 
-				// SHIFT ->1 EXIT1 ->0 PAUSE
-				tock();
-				pin_tms::set_high();
-				tick();
+				// (SHIFT ->1) EXIT1 ->0 PAUSE
 				tock();
 				pin_tdi::make_input();
 				pin_tms::set_low();
@@ -132,32 +134,8 @@ private:
 		asm __volatile__ ("nop");
 	}
 
-	static void clock_wait()
+	void clock_wait()
 	{
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
-		nop();
 		nop();
 		nop();
 		nop();
@@ -193,6 +171,8 @@ private:
 				Pin::make_low();
 		}
 	}
+
+	Process m_process;
 };
 
 #endif
