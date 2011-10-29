@@ -104,6 +104,30 @@ struct handler_jtagg
 			return true;
 		case 3: // FREQUENCY 32'wait_time
 			return true;
+		case 4: // CLOCK 32'ticks
+			if (cp.size() >= 4)
+			{
+				uint32_t clocks = cp[0]
+					| (uint32_t(cp[1]) << 8)
+					| (uint32_t(cp[2]) << 16)
+					| (uint32_t(cp[3]) << 24);
+				while (clocks != 0)
+				{
+					uint16_t chunk = clocks > 2000? 2000: clocks;
+					clocks -= chunk;
+					for (; chunk; --chunk)
+					{
+						tick();
+						m_process();
+						tock();
+					}
+
+					com.write(0x80);
+					com.write(0x41);
+					com.write(clocks == 0);
+				}
+			}
+			return true;
 		}
 
 		return false;
@@ -136,6 +160,14 @@ private:
 
 	void clock_wait()
 	{
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
+		nop();
 		nop();
 		nop();
 		nop();
