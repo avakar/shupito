@@ -103,6 +103,9 @@ struct handler_jtagg
 			}
 			return true;
 		case 3: // FREQUENCY 32'wait_time
+			com.write(0x80);
+			com.write(0x31);
+			com.write(0x01);
 			return true;
 		case 4: // CLOCK 32'ticks
 			if (cp.size() >= 4)
@@ -148,8 +151,8 @@ struct handler_jtagg
 
 	void process_selected()
 	{
-		/*tick();
-		tock();*/
+		tick();
+		tock();
 	}
 
 private:
