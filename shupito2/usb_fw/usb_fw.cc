@@ -10,7 +10,7 @@
 #include "../../fw_common/avrlib/counter.hpp"
 #include "../../fw_common/avrlib/timer1.hpp"
 
-typedef avrlib::async_usart<avrlib::usart1, 64, 64, avrlib::bootseq> com_t;
+typedef avrlib::async_usart<avrlib::usart1, 64, 64, avrlib::nobootseq> com_t;
 com_t com;
 ISR(USART1_RX_vect) { com.process_rx(); }
 
@@ -49,7 +49,7 @@ class usb_t
 {
 public:
 	explicit usb_t(InStream & in)
-		: m_in(in), m_resets(0), m_sofs(0), m_enabled(false), last_intr(0), last_i1(0), last_i2(0xcc),
+		: m_in(in), m_resets(0), m_sofs(0), m_enabled(false), m_enable_bootloader(true), last_intr(0), last_i1(0), last_i2(0xcc),
 		m_out_packet_pending(false)
 	{
 		m_ep0_transaction.m_request = 0xff;
@@ -157,7 +157,12 @@ public:
 		{
 			UEINTX = (uint8_t)~((1<<TXINI)|(1<<RXOUTI));
 			while (!m_in.empty() && (UEINTX & (1<<RWAL)) != 0)
-				UEDATX = m_in.read();
+			{
+				uint8_t ch = m_in.read();
+				if (m_enable_bootloader)
+					m_bootseq.check(ch);
+				UEDATX = ch;
+			}
 			UEINTX = (uint8_t)~((1<<FIFOCON)|(1<<RXOUTI));
 		}
 	}
@@ -167,9 +172,10 @@ public:
 	uint16_t m_resets, m_sofs;
 
 private:
-	bool m_enabled;
+	bool m_enabled, m_enable_bootloader;
 	uint8_t last_intr, last_i1, last_i2;
 	bool m_out_packet_pending;
+	avrlib::bootseq m_bootseq;
 
 	void configure_ep0()
 	{
@@ -259,6 +265,9 @@ private:
 				dte_rate |= uint32_t(UEDATX) << 8;
 				dte_rate |= uint32_t(UEDATX) << 16;
 				dte_rate |= uint32_t(UEDATX) << 24;
+
+				m_enable_bootloader = dte_rate == 1234;
+
 				//format(com, "set_line_conding %x\r\n") % dte_rate;
 			}
 			UEINTX = ~(1<<RXOUTI);
