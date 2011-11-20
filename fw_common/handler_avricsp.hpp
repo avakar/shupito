@@ -111,27 +111,38 @@ public:
 				}
 			}
 			break;
-		case 4: // READ 1'memid 4'addr 1'size
+		case 4: // READ 1'memid 4'addr 2'size
 			{
 				uint8_t memid = cp[0];
 				switch (memid)
 				{
 				case 1:
 					{
-						uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
-						uint8_t size = cp[5];
-						com.write(0x80);
-						com.write(0xf4);
-						com.write(size);
-						for (; size != 0; --size, ++addr)
+						uint32_t addr = cp[1] | ((uint32_t)cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
+						uint16_t size = cp[5] | ((uint32_t)cp[6] << 8);
+
+						for (;;)
 						{
-							// program memory words are sent in the little endian order
-							spi.send(addr & 1? 0x28: 0x20);
-							spi.send(addr >> 9);
-							spi.send(addr >> 1);
-							com.write(spi.send(0));
+							uint8_t chunk = size > 15? 15: size;
+
+							com.write(0x80);
+							com.write(0x40 | chunk);
+							for (uint8_t i = chunk; i != 0; --i, ++addr)
+							{
+								// program memory words are sent in the little endian order
+								spi.send(addr & 1? 0x28: 0x20);
+								spi.send(addr >> 9);
+								m_process();
+								spi.send(addr >> 1);
+								com.write(spi.send(0));
+								m_process();
+							}
+
+							size -= chunk;
+							if (chunk < 15)
+								break;
 						}
-						com.write(0);
+
 					}
 					break;
 				case 3:
@@ -165,7 +176,7 @@ public:
 				spi.send(0);
 				spi.send(0);
 
-				avrlib::wait(clock, Clock::template us<10000>::value);
+				avrlib::wait(clock, Clock::template us<100000>::value);
 
 				com.write(0x80);
 				com.write(0x51);
