@@ -412,14 +412,8 @@ ISR(USARTC0_RXC_vect) { pdi.intr_rxc(); }
 
 struct process_t
 {
-	void operator()() const
-	{
-		pdi.process();
-		com_inner.process_tx();
-		com_outer.process_tx();
-		com_app.process_tx();
-	}
-} process;
+	void operator()() const;
+} g_process;
 
 static uint8_t const device_descriptor[] PROGMEM = {
 #include "desc.h"
@@ -431,7 +425,7 @@ public:
 	context_t()
 		: hxmega(pdi, clock), havricsp(spi, clock),
 		vdd_timeout(clock, clock_t::us<100000>::value), m_vccio_drive_check_timeout(clock, clock_t::us<200000>::value),
-		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_com_state(enabled), m_vccio_drive_state(enabled),
+		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_com_state(enabled), m_vccio_drive_state(enabled), m_vccio_state_send_scheduled(false),
 		m_vccio_voltage(0), m_com_app_speed((-1 << 12)|102 /*38400*/)
 	{
 		m_vccio_drive_check_timeout.cancel();
@@ -495,28 +489,19 @@ public:
 			}
 		}
 
-		if (ADCA.CH0.INTFLAGS & ADC_CH_CHIF_bm)
+		if (m_vccio_state_send_scheduled)
 		{
-			ADCA.CH0.INTFLAGS = ADC_CH_CHIF_bm;
-			m_vccio_voltage = ADCA.CH0RESL;
-			m_vccio_voltage |= (ADCA.CH0RESH << 8);
-			m_vccio_voltage = (int32_t)m_vccio_voltage * 27 / 10;
-			ADCA.CH0.CTRL |= ADC_CH_START_bm;
+			m_vccio_state_send_scheduled = false;
+			this->send_vccio_state(m_vdd_com);
 		}
 
-		if (m_vccio_drive_state == active && m_vccio_drive_check_timeout)
-		{
-			m_vccio_drive_check_timeout.force();
-			if (m_vccio_voltage < 4500)
-				this->set_vccio_drive(0, m_vdd_com);
-		}
-		if (m_vccio_drive_state == disabled && m_vccio_voltage < 300)
+		if (m_vccio_drive_state == disabled && m_vccio_voltage < 111) // 300mV
 		{
 			m_vccio_drive_state = enabled;
 			if (m_vdd_com)
 				this->send_vccio_drive_list(*m_vdd_com);
 		}
-		if (m_vccio_drive_state == enabled && m_vccio_voltage > 500)
+		if (m_vccio_drive_state == enabled && m_vccio_voltage > 185) // 500mV
 		{
 			m_vccio_drive_state = disabled;
 			if (m_vdd_com)
@@ -578,8 +563,6 @@ public:
 
 		if (handler)
 			handler->process_selected();
-
-		process();
 	}
 
 	void allow_com_app()
@@ -602,6 +585,25 @@ public:
 		m_app_com_state = disabled;
 		if (m_app_com)
 			this->send_pipe_list(*m_app_com);
+	}
+
+	void process()
+	{
+		if (ADCA.CH0.INTFLAGS & ADC_CH_CHIF_bm)
+		{
+			ADCA.CH0.INTFLAGS = ADC_CH_CHIF_bm;
+			m_vccio_voltage = ADCA.CH0RESL;
+			m_vccio_voltage |= (ADCA.CH0RESH << 8);
+			m_vccio_voltage = (int32_t)m_vccio_voltage;
+			ADCA.CH0.CTRL |= ADC_CH_START_bm;
+		}
+
+		if (m_vccio_drive_state == active && m_vccio_drive_check_timeout)
+		{
+			m_vccio_drive_check_timeout.force();
+			if (m_vccio_voltage < 1667) // 4500mV
+				this->set_vccio_drive(0);
+		}
 	}
 
 private:
@@ -757,7 +759,7 @@ private:
 		pCom->write(pin_ext_sup::get_value());
 	}
 
-	void set_vccio_drive(uint8_t value, com_writer_t * pCom)
+	void set_vccio_drive(uint8_t value)
 	{
 		if (value == 1 && m_vccio_drive_state != disabled)
 		{
@@ -772,7 +774,7 @@ private:
 			m_vccio_drive_state = enabled;
 		}
 
-		this->send_vccio_state(pCom);
+		m_vccio_state_send_scheduled = true;
 	}
 
 	void send_vccio_drive_list(com_writer_t & com)
@@ -910,7 +912,8 @@ private:
 
 			if (cp.size() == 3 && cp[0] == 1 && cp[1] == 2)
 			{
-				this->set_vccio_drive(cp[2], &com);
+				m_vdd_com = &com;
+				this->set_vccio_drive(cp[2]);
 			}
 
 			return true;
@@ -1011,12 +1014,22 @@ private:
 	com_writer_t * m_app_com;
 
 	enum { disabled, enabled, active } m_app_com_state, m_vccio_drive_state;
+	bool m_vccio_state_send_scheduled;
 
 	int16_t m_vccio_voltage;
 	uint16_t m_com_app_speed;
 };
 
 context_t ctx;
+
+void process_t::operator()() const
+{
+	ctx.process();
+	pdi.process();
+	com_inner.process_tx();
+	com_outer.process_tx();
+	com_app.process_tx();
+}
 
 void spi_t::clear()
 {
@@ -1075,5 +1088,6 @@ int main()
 	for (;;)
 	{
 		ctx.run();
+		g_process();
 	}
 }

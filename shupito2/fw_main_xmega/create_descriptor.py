@@ -58,6 +58,9 @@ open('desc.h', 'w').write(to_c(adler16(make_descriptor(UUID('093d7f32-cdc6-4928-
         ),
         Config(UUID('356e9bf7-8718-4965-94a4-0be370c8797c'), 9, 1, flags=0x03,   # tunnel
             data=struct.pack('<BI', 1, 2000000)),
-        Config(UUID('1d4738a0-fc34-4f71-aa73-57881b278cb1'), 10, 1, flags=0x00)  # measurement
+        Config(UUID('1d4738a0-fc34-4f71-aa73-57881b278cb1'), 10, 1, flags=0x00,  # measurement
+            data=struct.pack('<BI',
+                1, # version
+                0x0002B333)) # 16.16 fixpoint millivolts per unit
     )
 ))))
