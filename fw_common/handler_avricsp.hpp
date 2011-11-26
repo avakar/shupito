@@ -142,10 +142,34 @@ public:
 							if (chunk < 15)
 								break;
 						}
-
 					}
 					break;
-				case 3:
+				case 2: // EEPROM
+					{
+						uint16_t addr = cp[1] | (cp[2] << 8);
+						uint16_t size = cp[5] | (cp[6] << 8);
+						for (;;)
+						{
+							uint8_t chunk = size > 15? 15: size;
+
+							com.write(0x80);
+							com.write(0x40 | chunk);
+							for (uint8_t i = chunk; i != 0; --i, ++addr)
+							{
+								spi.send(0xa0);
+								spi.send(addr >> 8);
+								spi.send(addr);
+								com.write(spi.send(0));
+								m_process();
+							}
+
+							size -= chunk;
+							if (chunk < 15)
+								break;
+						}
+					}
+					break;
+				case 3: // FUSES
 					{
 						static uint8_t const commands[][3] =
 						{
@@ -190,7 +214,7 @@ public:
 				uint8_t memid = cp[0];
 
 				bool success = true;
-				if (memid == 1)
+				if (memid == 1 || memid == 2)
 				{
 					m_mempage_ptr = (cp[1]) | (cp[2] << 8);
 					// TODO: potentially load the extended address byte
@@ -225,6 +249,18 @@ public:
 						spi.send(m_mempage_ptr >> 1);
 						spi.send(cp[i]);
 						++m_mempage_ptr;
+					}
+				}
+				else if (memid == 2) // eeprom
+				{
+					for (uint8_t i = 1; i < cp.size(); ++i)
+					{
+						spi.send(0xc0);
+						spi.send(m_mempage_ptr >> 8);
+						spi.send(m_mempage_ptr);
+						spi.send(cp[i]);
+						++m_mempage_ptr;
+						avrlib::wait(clock, Clock::template us<10000>::value);
 					}
 				}
 				else if (memid == 3) // fuses
@@ -268,7 +304,7 @@ public:
 				
 					avrlib::wait(clock, Clock::template us<5000>::value);
 				}
-				else if (memid == 3)
+				else if (memid == 2 || memid == 3)
 				{
 				}
 				else
