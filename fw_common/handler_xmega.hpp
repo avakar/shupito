@@ -107,28 +107,44 @@ public:
 				}
 			}
 			break;
-		case 4: // READ 1'memid 4'addr 1'size
-			if (cp.size() == 6)
+		case 4: // READ 1'memid 4'addr 2'size
+			if (cp.size() == 7)
 			{
 				uint8_t error = 0;
 
 				uint8_t memid = cp[0];
 				if (memid == 1)
 				{
-					uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
-					addr %= 0x0C0000;
+					uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16);
 					addr += 0x800000;
 
 					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x43);
+					pdi_st_ptr(pdi, addr);
 
-					uint8_t len = cp[5];
+					uint16_t len = cp[5] | (cp[6] << 8);
 
-					com.write(0x80);
-					com.write(0xf4);
-					com.write(len);
+					while (error == 0)
+					{
+						uint8_t chunk = len > 15? 15: (uint8_t)len;
+						if (error != 0)
+							chunk = 0;
 
-					error = pdi_ptrcopy(pdi, com, addr, len, clock, process);
-					com.write(0);
+						com.write(0x80);
+						com.write(0x40 | chunk);
+						for (uint8_t i = chunk; i != 0; --i, ++addr)
+						{
+							pdi_ld(pdi);
+							uint8_t v = 0;
+							if (error == 0)
+								error = pdi_read(pdi, v, clock, process);
+							com.write(v);
+							process();
+						}
+
+						len -= chunk;
+						if (chunk < 15)
+							break;
+					}
 				}
 				else if (memid == 3)
 				{
