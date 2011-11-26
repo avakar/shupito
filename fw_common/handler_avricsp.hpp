@@ -192,8 +192,8 @@ public:
 				}
 			}
 			break;
-		case 5: // ERASE 1'memid
-			if (cp.size() == 0)
+		case 5: // ERASE [1'memid]
+			if (cp.size() == 0 || (cp.size() == 1 && cp[0] == 1))
 			{
 				spi.send(0xAC);
 				spi.send(0x80);
@@ -201,11 +201,11 @@ public:
 				spi.send(0);
 
 				avrlib::wait(clock, Clock::template us<100000>::value);
-
-				com.write(0x80);
-				com.write(0x51);
-				com.write(0x00);
 			}
+
+			com.write(0x80);
+			com.write(0x51);
+			com.write(0x00);
 			break;
 		case 6:
 			// WPREP 1'memid 4'addr

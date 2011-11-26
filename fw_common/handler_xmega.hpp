@@ -113,12 +113,13 @@ public:
 				uint8_t error = 0;
 
 				uint8_t memid = cp[0];
-				if (memid == 1)
+				if (memid == 1 || memid == 2)
 				{
 					uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16);
-					addr += 0x800000;
 
-					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x43);
+					addr += memid == 1? 0x800000: 0x8C0000;
+
+					pdi_sts(pdi, (uint32_t)0x010001CA, memid == 1? (uint8_t)0x43: (uint8_t)0x06);
 					pdi_st_ptr(pdi, addr);
 
 					uint16_t len = cp[5] | (cp[6] << 8);
@@ -174,16 +175,18 @@ public:
 			break;
 		case 5:
 			// ERASE 1'memid
-			if (cp.size() == 0)
 			{
-				// CMD = Chip erase
-				pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x40);
-				pdi_sts(pdi, (uint32_t)0x010001CB, (uint8_t)0x01);
+				uint8_t error = 0;
+				if (cp.size() == 0)
+				{
+					// CMD = Chip erase
+					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x40);
+					pdi_sts(pdi, (uint32_t)0x010001CB, (uint8_t)0x01);
 
-				uint8_t error = pdi_wait_nvm_busy(pdi, clock, Clock::template us<50000>::value, process);
-				if (error)
-					pdi.clear();
-
+					error = pdi_wait_nvm_busy(pdi, clock, Clock::template us<50000>::value, process);
+					if (error)
+						pdi.clear();
+				}
 				com.write(0x80);
 				com.write(0x51);
 				com.write(error);
@@ -197,13 +200,13 @@ public:
 				uint8_t memid = cp[0];
 
 				uint8_t error = 0;
-				if (memid == 1)
+				if (memid == 1 || memid == 2)
 				{
 					uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
-					addr %= 0x0C0000;
-					addr += 0x800000;
+					addr += memid == 1? 0x800000: 0x8C0000;
 
-					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x26);
+					// Erase page buffer
+					pdi_sts(pdi, (uint32_t)0x010001CA, memid == 1? (uint8_t)0x26: (uint8_t)0x36);
 					pdi_sts(pdi, (uint32_t)0x010001CB, (uint8_t)0x01);
 
 					error = pdi_wait_nvm_busy(pdi, clock, Clock::template us<10000>::value, process);
@@ -213,7 +216,8 @@ public:
 					}
 					else
 					{
-						pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x23);
+						// Load page buffer
+						pdi_sts(pdi, (uint32_t)0x010001CA, memid == 1? (uint8_t)0x23: (uint8_t)0x33);
 						pdi_st_ptr(pdi, addr);
 					}
 				}
@@ -240,7 +244,7 @@ public:
 				uint8_t error = 0;
 
 				uint8_t memid = cp[0];
-				if (memid == 1)
+				if (memid == 1 || memid == 2)
 				{
 					for (uint8_t i = 1; i < cp.size(); ++i)
 					{
@@ -276,13 +280,12 @@ public:
 
 				uint8_t memid = cp[0];
 				uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
-				if (memid == 1)
+				if (memid == 1 || memid == 2)
 				{
-					addr %= 0x0C0000;
-					addr += 0x800000;
+					addr += memid == 1? 0x800000: 0x8C0000;
 
-					// CMD = Erase & Write Flash Page
-					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x2F);
+					// CMD = Erase & Write Page
+					pdi_sts(pdi, (uint32_t)0x010001CA, memid == 1? (uint8_t)0x2F: (uint8_t)0x35);
 					pdi_sts(pdi, addr, (uint8_t)0);
 
 					error = pdi_wait_nvm_busy(pdi, clock, Clock::template us<50000>::value, process);
