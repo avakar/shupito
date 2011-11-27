@@ -12,3 +12,5 @@ Debug
 Release
 shupito\fw_main_xmega\default
 shupito\usb_fw\default
+shupito2\fw_main_xmega\default
+shupito2\usb_fw\default
