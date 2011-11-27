@@ -139,6 +139,11 @@ struct pin_buffer_with_oe
 	{
 		return ValuePin::read();
 	}
+
+	static void toggle()
+	{
+		ValuePin::toggle();
+	}
 };
 
 typedef pin_buffer_with_oe<pin_txd, pin_txdd> pin_buf_txd;
@@ -220,8 +225,13 @@ public:
 		pin_led::set_value(false);
 	}
 
-	void init()
+	void init(uint16_t bsel)
 	{
+		if (bsel)
+			--bsel;
+		USARTC0.BAUDCTRLA = bsel;
+		USARTC0.BAUDCTRLB = bsel >> 8;
+
 		if (m_state != st_disabled)
 			return;
 
@@ -305,25 +315,24 @@ public:
 		case st_disabled:
 			break;
 		case st_rst_disable:
-			if (m_clock.value() - m_time_base >= Clock::template us<8>::value) // FIXME: time constants
+			if (m_clock.value() - m_time_base >= Clock::template us<8>::value)
 			{
-				USARTC0.BAUDCTRLA = 63;
-				USARTC0.BAUDCTRLB = 0;
 				USARTC0.CTRLC = USART_CMODE_SYNCHRONOUS_gc | USART_PMODE_EVEN_gc | USART_SBMODE_bm
 					| USART_CHSIZE_8BIT_gc;
 				USARTC0.CTRLA = 0;
 				USARTC0.CTRLB = USART_TXEN_bm;
 
 				m_state = st_wait_ticks;
-				m_time_base += Clock::template us<8>::value;
+				m_time_base = m_clock.value();
 			}
 			break;
 		case st_wait_ticks:
-			if (m_clock.value() - m_time_base >= Clock::template us<128>::value) // FIXME: time constants
+			// worst-case scenario is 10kHz programming speed
+			if (m_clock.value() - m_time_base >= Clock::template us<1800>::value)
 			{
 				m_state = st_idle;
 				m_rx_count = 0;
-				pdi_stcs(*this, 0x02/*CTRL*/, 0x03/*GUARDTIME_16*/);
+				pdi_stcs(*this, 0x02/*CTRL*/, 0x02/*GUARDTIME_32*/);
 			}
 			break;
 		case st_idle:
@@ -333,7 +342,7 @@ public:
 			pin_led::set_value(true);
 			break;
 		case st_unrst:
-			if (m_clock.value() - m_time_base >= Clock::template us<16>::value) // FIXME: time constants
+			if (m_clock.value() - m_time_base >= Clock::template us<16>::value)
 			{
 				PdiClk::make_input();
 				PdiData::make_input();
@@ -347,6 +356,11 @@ public:
 			}
 			break;
 		}
+	}
+
+	bool enabled() const
+	{
+		return m_state != st_disabled && m_state != st_unrst;
 	}
 
 	void intr_rxc()
@@ -393,6 +407,8 @@ public:
 			USARTC0.CTRLA = 0;
 		}
 	}
+
+	uint8_t state() const { return m_state; }
 
 private:
 	Clock & m_clock;
@@ -921,24 +937,8 @@ private:
 			avrlib::send(com, "Shupito v2.0\n");
 			cp.clear();
 			return true;
-		case 'l':
-			pin_led::set_value(true);
-			cp.clear();
-			return true;
-		case 'L':
-			pin_led::set_value(false);
-			cp.clear();
-			return true;
-		case 'e':
-			pin_ext_sup::set_value(true);
-			cp.clear();
-			return true;
-		case 'E':
-			pin_ext_sup::set_value(false);
-			cp.clear();
-			return true;
-		case 't':
-			avrlib::format(com, "clock: %x\n") % clock.value();
+		case 's':
+			avrlib::format(com, "state: %x\n") % pdi.state();
 			cp.clear();
 			return true;
 		case 'm':
@@ -1042,15 +1042,17 @@ void spi_t::clear()
 	ctx.allow_com_app();
 }
 
-spi_t::error_t spi_t::start_master(uint16_t speed_khz)
+spi_t::error_t spi_t::start_master(uint16_t bsel)
 {
 	ctx.disallow_com_app();
 
 	pin_buf_txd::make_low();
 	pin_buf_xck::make_low();
 
-	USARTC1.BAUDCTRLA = 127;
-	USARTC1.BAUDCTRLB = 0;
+	if (bsel)
+		--bsel;
+	USARTC1.BAUDCTRLA = bsel;
+	USARTC1.BAUDCTRLB = bsel >> 8;
 	USARTC1.CTRLC = USART_CMODE_MSPI_gc;
 	USARTC1.CTRLB = USART_RXEN_bm | USART_TXEN_bm;
 	return 0;

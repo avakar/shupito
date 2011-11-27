@@ -27,10 +27,10 @@ public:
 	{
 		switch (cp.command())
 		{
-		case 1:
+		case 1: // PROGEN 2'bsel
 			{
 				// Enable programming mode
-				pdi.init();
+				pdi.init(cp[0] | (cp[1] << 8));
 				while (!pdi.tx_ready())
 					process();
 
@@ -68,12 +68,13 @@ public:
 			}
 			break;
 		case 2: // Leave programming mode
-
 			// Clear the RESET register first; otherwise the chip will be held in reset
 			// by the PDI controller until an external reset is issued.
-			pdi_stcs(pdi, 0x01, 0x00);
-
-			pdi.clear();
+			if (pdi.enabled())
+			{
+				pdi_stcs(pdi, 0x01, 0x00);
+				pdi.clear();
+			}
 
 			com.write(0x80);
 			com.write(0x21);
@@ -86,7 +87,7 @@ public:
 				pdi_lds(pdi, (uint32_t)0x01000090, 4);
 
 				com.write(0x80);
-				com.write(0x34);
+				com.write(0x35);
 
 				uint8_t error = 0;
 				
@@ -99,12 +100,8 @@ public:
 				}
 
 				if (error)
-				{
 					pdi.clear();
-					com.write(0x80);
-					com.write(0x21);
-					com.write(error);
-				}
+				com.write(error);
 			}
 			break;
 		case 4: // READ 1'memid 4'addr 2'size

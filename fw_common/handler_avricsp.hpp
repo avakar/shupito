@@ -28,11 +28,11 @@ public:
 	{
 		switch (cp.command())
 		{
-		case 1:
+		case 1: // PROGEN 2'bsel
 			m_programming_enabled = false;
 
 			{
-				typename spi_t::error_t err = spi.start_master(0);
+				typename spi_t::error_t err = spi.start_master(cp[0] | (cp[1] << 8));
 				if (err)
 				{
 					com.write(0x80);
@@ -102,13 +102,14 @@ public:
 				static uint8_t const command_count = sizeof commands / sizeof commands[0];
 				
 				com.write(0x80);
-				com.write(0x30 | command_count);
+				com.write(0x30 | (command_count + 1));
 				for (uint8_t i = 0; i < command_count; ++i)
 				{
 					for (uint8_t j = 0; j < 3; ++j)
 						spi.send(commands[i][j]);
 					com.write(spi.send(0));
 				}
+				com.write(0); // no error
 			}
 			break;
 		case 4: // READ 1'memid 4'addr 2'size
