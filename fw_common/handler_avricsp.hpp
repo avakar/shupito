@@ -53,7 +53,7 @@ public:
 				ResetPin::set_value(false);
 
 				// There has to be a 20ms delay on atmega128
-				avrlib::wait(clock, Clock::template us<20>::value, m_process);
+				avrlib::wait(clock, Clock::template us<20000>::value, m_process);
 
 				spi.send(0xAC);
 				spi.send(0x53);
