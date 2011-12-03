@@ -338,6 +338,14 @@ public:
 		case st_idle:
 			pin_led::set_value(false);
 			break;
+		case st_rx_done:
+			m_time_base = m_clock.value();
+			m_state = st_rx_done_wait;
+			//fallthrough
+		case st_rx_done_wait:
+			if (m_clock.value() - m_time_base > Clock::template us<100>::value)
+				m_state = st_idle;
+			//fallthrough
 		case st_busy:
 			pin_led::set_value(true);
 			break;
@@ -371,7 +379,7 @@ public:
 			USARTC0.CTRLA = 0;
 			USARTC0.CTRLB = USART_TXEN_bm;
 			PdiData::make_output();
-			m_state = st_idle;
+			m_state = st_rx_done;
 		}
 	}
 
@@ -417,7 +425,7 @@ private:
 	avrlib::buffer<uint8_t, 16> m_tx_buffer;
 	volatile uint8_t m_rx_count;
 
-	enum { st_disabled, st_rst_disable, st_wait_ticks, st_idle, st_busy, st_unrst } volatile m_state;
+	enum { st_disabled, st_rst_disable, st_wait_ticks, st_idle, st_rx_done, st_rx_done_wait, st_busy, st_unrst } volatile m_state;
 };
 typedef pdi_t<clock_t, pin_buf_rst, pin_buf_pdi> my_pdi_t;
 my_pdi_t pdi(clock);
