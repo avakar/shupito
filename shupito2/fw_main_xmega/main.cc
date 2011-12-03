@@ -315,7 +315,7 @@ public:
 		case st_disabled:
 			break;
 		case st_rst_disable:
-			if (m_clock.value() - m_time_base >= Clock::template us<8>::value)
+			if (m_clock.value() - m_time_base > Clock::template us<8>::value)
 			{
 				USARTC0.CTRLC = USART_CMODE_SYNCHRONOUS_gc | USART_PMODE_EVEN_gc | USART_SBMODE_bm
 					| USART_CHSIZE_8BIT_gc;
@@ -328,7 +328,7 @@ public:
 			break;
 		case st_wait_ticks:
 			// worst-case scenario is 10kHz programming speed
-			if (m_clock.value() - m_time_base >= Clock::template us<1800>::value)
+			if (m_clock.value() - m_time_base > Clock::template us<1800>::value)
 			{
 				m_state = st_idle;
 				m_rx_count = 0;
@@ -342,7 +342,7 @@ public:
 			pin_led::set_value(true);
 			break;
 		case st_unrst:
-			if (m_clock.value() - m_time_base >= Clock::template us<16>::value)
+			if (m_clock.value() - m_time_base > Clock::template us<100>::value)
 			{
 				PdiClk::make_input();
 				PdiData::make_input();
