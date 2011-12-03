@@ -617,7 +617,7 @@ public:
 		if (m_vccio_drive_state == active && m_vccio_drive_check_timeout)
 		{
 			m_vccio_drive_check_timeout.force();
-			if (m_vccio_voltage < 1667) // 4500mV
+			if (m_vccio_voltage < 1630) // 4400mV
 				this->set_vccio_drive(0);
 		}
 	}
