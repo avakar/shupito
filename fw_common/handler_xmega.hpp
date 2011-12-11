@@ -112,7 +112,7 @@ public:
 				uint8_t memid = cp[0];
 				if (memid == 1 || memid == 2)
 				{
-					uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16);
+					uint32_t addr = cp[1] | ((uint16_t)cp[2] << 8) | ((uint32_t)cp[3] << 16);
 
 					addr += memid == 1? 0x800000: 0x8C0000;
 
@@ -199,7 +199,7 @@ public:
 				uint8_t error = 0;
 				if (memid == 1 || memid == 2)
 				{
-					uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
+					uint32_t addr = cp[1] | ((uint16_t)cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
 					addr += memid == 1? 0x800000: 0x8C0000;
 
 					// Erase page buffer
@@ -276,7 +276,7 @@ public:
 				uint8_t error = 0;
 
 				uint8_t memid = cp[0];
-				uint32_t addr = cp[1] | (cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
+				uint32_t addr = cp[1] | ((uint16_t)cp[2] << 8) | ((uint32_t)cp[3] << 16) | ((uint32_t)cp[4] << 24);
 				if (memid == 1 || memid == 2)
 				{
 					addr += memid == 1? 0x800000: 0x8C0000;

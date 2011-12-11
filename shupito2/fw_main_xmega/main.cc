@@ -58,7 +58,11 @@ clock_t clock;
 		static bool read() { return (port.IN & (1<<(pin))) != 0; } \
 	}
 
-AVRLIB_MAKE_XMEGA_PIN(pin_ext_sup, PORTB, 2);
+AVRLIB_MAKE_XMEGA_PIN(pin_sup_3v3, PORTB, 2);
+AVRLIB_MAKE_XMEGA_PIN(pin_sup_5v0, PORTB, 0);
+
+AVRLIB_MAKE_XMEGA_PIN(pin_switched_pwr_en, PORTC, 0);
+
 AVRLIB_MAKE_XMEGA_PIN(pin_led,     PORTA, 2);
 
 AVRLIB_MAKE_XMEGA_PIN(pin_pdid, PORTD, 1);
@@ -475,7 +479,11 @@ public:
 		pin_buf_pdi::init();
 
 		pin_led::make_low();
-		pin_ext_sup::make_low();
+		pin_sup_3v3::make_low();
+		pin_sup_5v0::make_low();
+
+		// Disable the switched regulator for now
+		pin_switched_pwr_en::make_low();
 
 		inner_redirected = false;
 
@@ -618,15 +626,21 @@ public:
 			ADCA.CH0.INTFLAGS = ADC_CH_CHIF_bm;
 			m_vccio_voltage = ADCA.CH0RESL;
 			m_vccio_voltage |= (ADCA.CH0RESH << 8);
-			m_vccio_voltage = (int32_t)m_vccio_voltage;
 			ADCA.CH0.CTRL |= ADC_CH_START_bm;
 		}
 
 		if (m_vccio_drive_state == active && m_vccio_drive_check_timeout)
 		{
 			m_vccio_drive_check_timeout.force();
-			if (m_vccio_voltage < 1630) // 4400mV
+			if (pin_sup_5v0::get_value() && m_vccio_voltage < 1630) // 4400mV
+			{
 				this->set_vccio_drive(0);
+			}
+			else if (pin_sup_3v3::get_value()
+				&& (m_vccio_voltage < 1110 || m_vccio_voltage > 1332)) // 3000mV and 3600mV
+			{
+				this->set_vccio_drive(0);
+			}
 		}
 	}
 
@@ -778,22 +792,28 @@ private:
 
 		pCom->write(0x80);
 		pCom->write(0xa3);
-		pCom->write(0x01);  // VDD
+		pCom->write(0x01);  // VCCIO
 		pCom->write(0x01);  // get_drive
-		pCom->write(pin_ext_sup::get_value());
+		pCom->write(pin_sup_3v3::get_value()? 0x01: pin_sup_5v0::get_value()? 0x02: 0x00);
 	}
 
 	void set_vccio_drive(uint8_t value)
 	{
-		if (value == 1 && m_vccio_drive_state != disabled)
+		pin_sup_3v3::set_value(false);
+		pin_sup_5v0::set_value(false);
+
+		if (((value == 1) || (value == 2)) && m_vccio_drive_state != disabled)
 		{
-			pin_ext_sup::set_value(true);
-			m_vccio_drive_check_timeout.start();
+			m_vccio_drive_check_timeout.restart();
 			m_vccio_drive_state = active;
+
+			if (value == 1)
+				pin_sup_3v3::set_value(true);
+			else if (value == 2)
+				pin_sup_5v0::set_value(true);
 		}
 		else
 		{
-			pin_ext_sup::set_value(false);
 			m_vccio_drive_check_timeout.cancel();
 			m_vccio_drive_state = enabled;
 		}
@@ -804,9 +824,9 @@ private:
 	void send_vccio_drive_list(com_writer_t & com)
 	{
 		com.write(0x80);
-		com.write(m_vccio_drive_state != disabled? 0xaa: 0xa6);
+		com.write(m_vccio_drive_state != disabled? 0xae: 0xa6);
 		com.write(0x00);
-		com.write(0x01);  // VDD
+		com.write(0x01);  // VCCIO
 
 		com.write(0x00);  // <hiz>
 		com.write(0x00);
@@ -814,6 +834,10 @@ private:
 		com.write(0x00);
 		if (m_vccio_drive_state != disabled)
 		{
+			com.write(0xe4);  // 3.3V, 50mA
+			com.write(0x0c);
+			com.write(0x32);
+			com.write(0x00);
 			com.write(0x88);  // 5V, 100mA
 			com.write(0x13);
 			com.write(0x64);
@@ -957,6 +981,18 @@ private:
 			vdd_timeout.cancel();
 			cp.clear();
 			return true;
+		case ' ':
+			this->set_vccio_drive(0);
+			cp.clear();
+			return true;
+		case '1':
+			this->set_vccio_drive(1);
+			cp.clear();
+			return true;
+		case '2':
+			this->set_vccio_drive(2);
+			cp.clear();
+			return true;
 		case 254:
 			cp.clear();
 			return true;
@@ -1083,13 +1119,28 @@ int main()
 	PORTD.DIRSET = (1<<3);
 
 	// Run at 32MHz
-	OSC.CTRL = OSC_RC32MEN_bm | OSC_RC2MEN_bm;
+	OSC.CTRL = OSC_RC32MEN_bm | OSC_RC2MEN_bm | OSC_RC32KEN_bm;
 	while ((OSC.STATUS & OSC_RC32MRDY_bm) == 0)
 	{
 	}
 
 	CCP = CCP_IOREG_gc;
 	CLK.CTRL = CLK_SCLKSEL_RC32M_gc;
+
+	OSC.CTRL = OSC_RC32MEN_bm | OSC_RC32KEN_bm;
+	while ((OSC.STATUS & OSC_RC32KRDY_bm) == 0)
+	{
+	}
+
+	DFLLRC32M.CTRL = DFLL_ENABLE_bm;
+
+	// Generate 8MHz clock for the USB chip
+	TCE0.CCAL = 1;
+	TCE0.CCAH = 0;
+	TCE0.CTRLB = TC0_CCBEN_bm | TC_WGMODE_FRQ_gc;
+	TCE0.CTRLA = TC_CLKSEL_DIV1_gc;
+
+	PORTE.DIRSET = (1<<1);
 
 	PMIC.CTRL = PMIC_HILVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_LOLVLEN_bm;
 	sei();
