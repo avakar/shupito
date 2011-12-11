@@ -14,9 +14,9 @@ typedef avrlib::async_usart<avrlib::usart1, 64, 64, avrlib::nobootseq> com_t;
 com_t com;
 ISR(USART1_RX_vect) { com.process_rx(); }
 
-typedef avrlib::counter<avrlib::timer1> clock_t;
+/*typedef avrlib::counter<avrlib::timer1> clock_t;
 clock_t clock;
-ISR(TIMER1_OVF_vect) { clock.tov_interrupt(); }
+ISR(TIMER1_OVF_vect) { clock.tov_interrupt(); }*/
 
 #define EPTYPE_CONTROL 0
 #define EPTYPE_ISOCHRONOUS 1
@@ -60,7 +60,7 @@ public:
 		USBCON |= (1<<USBE);
 
 		// Initialize PLL and wait for it to become locked
-		PLLCSR = (1<<PLLE);
+		PLLCSR = (1<<PLLE)|(1<<PLLP0);
 		while ((PLLCSR & (1<<PLOCK)) == 0)
 		{
 		}
@@ -361,7 +361,7 @@ int main()
 
 	sei();
 
-	clock.enable(avrlib::timer_fosc_8);
+	//clock.enable(avrlib::timer_fosc_8);
 
 	com.usart().open_sync_slave(true);
 	UCSR1D = (1<<CTSEN)|(1<<RTSEN);

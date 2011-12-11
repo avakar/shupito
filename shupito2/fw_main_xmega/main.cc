@@ -1083,13 +1083,28 @@ int main()
 	PORTD.DIRSET = (1<<3);
 
 	// Run at 32MHz
-	OSC.CTRL = OSC_RC32MEN_bm | OSC_RC2MEN_bm;
+	OSC.CTRL = OSC_RC32MEN_bm | OSC_RC2MEN_bm | OSC_RC32KEN_bm;
 	while ((OSC.STATUS & OSC_RC32MRDY_bm) == 0)
 	{
 	}
 
 	CCP = CCP_IOREG_gc;
 	CLK.CTRL = CLK_SCLKSEL_RC32M_gc;
+
+	OSC.CTRL = OSC_RC32MEN_bm | OSC_RC32KEN_bm;
+	while ((OSC.STATUS & OSC_RC32KRDY_bm) == 0)
+	{
+	}
+
+	DFLLRC32M.CTRL = DFLL_ENABLE_bm;
+
+	// Generate 16MHz clock for the USB chip
+	TCE0.CCAL = 0;
+	TCE0.CCAH = 0;
+	TCE0.CTRLB = TC0_CCBEN_bm | TC_WGMODE_FRQ_gc;
+	TCE0.CTRLA = TC_CLKSEL_DIV1_gc;
+
+	PORTE.DIRSET = (1<<1);
 
 	PMIC.CTRL = PMIC_HILVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_LOLVLEN_bm;
 	sei();
