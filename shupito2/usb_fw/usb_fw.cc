@@ -60,7 +60,7 @@ public:
 		USBCON |= (1<<USBE);
 
 		// Initialize PLL and wait for it to become locked
-		PLLCSR = (1<<PLLE)|(1<<PLLP0);
+		PLLCSR = (1<<PLLE);
 		while ((PLLCSR & (1<<PLOCK)) == 0)
 		{
 		}
