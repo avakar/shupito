@@ -454,7 +454,7 @@ public:
 		: hxmega(pdi, clock), havricsp(spi, clock),
 		vdd_timeout(clock, clock_t::us<100000>::value), m_vccio_drive_check_timeout(clock, clock_t::us<200000>::value),
 		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_com_state(enabled), m_vccio_drive_state(enabled), m_vccio_state_send_scheduled(false),
-		m_vccio_voltage(0), m_com_app_speed((-1 << 12)|102 /*38400*/)
+		m_vccio_voltage(0), m_vusb_voltage(0), m_com_app_speed((-1 << 12)|102 /*38400*/)
 	{
 		m_vccio_drive_check_timeout.cancel();
 	}
@@ -482,8 +482,7 @@ public:
 		pin_sup_3v3::make_low();
 		pin_sup_5v0::make_low();
 
-		// Disable the switched regulator for now
-		pin_switched_pwr_en::make_low();
+		pin_switched_pwr_en::make_high();
 
 		inner_redirected = false;
 
@@ -493,6 +492,8 @@ public:
 		// Prepare the ADC
 		ADCA.CH0.CTRL = ADC_CH_INPUTMODE_SINGLEENDED_gc;
 		ADCA.CH0.MUXCTRL = ADC_CH_MUXPOS_PIN6_gc;
+		ADCA.CH1.CTRL = ADC_CH_INPUTMODE_SINGLEENDED_gc;
+		ADCA.CH1.MUXCTRL = ADC_CH_MUXPOS_PIN5_gc;
 		ADCA.PRESCALER = ADC_PRESCALER_DIV64_gc;
 		ADCA.REFCTRL = ADC_REFSEL_INT1V_gc;
 		ADCA.CTRLB = ADC_CONMODE_bm | ADC_RESOLUTION_12BIT_gc;
@@ -500,6 +501,7 @@ public:
 
 		// Start the conversion immediately
 		ADCA.CH0.CTRL |= ADC_CH_START_bm;
+		ADCA.CH1.CTRL |= ADC_CH_START_bm;
 
 		handler = 0;
 		vdd_timeout.cancel();
@@ -527,14 +529,17 @@ public:
 			this->send_vccio_state(m_vdd_com);
 		}
 
-		if (m_vccio_drive_state == disabled && m_vccio_voltage < 111) // 300mV
+		if (m_vccio_drive_state == disabled && m_vccio_voltage < 111 && !pin_switched_pwr_en::get_value()) // 300mV
 		{
 			m_vccio_drive_state = enabled;
 			if (m_vdd_com)
 				this->send_vccio_drive_list(*m_vdd_com);
 		}
-		if (m_vccio_drive_state == enabled && m_vccio_voltage > 185) // 500mV
+		if ((m_vccio_drive_state == enabled && m_vccio_voltage > 185) // 500mV
+			|| (m_vccio_drive_state != disabled && pin_switched_pwr_en::get_value()))
 		{
+			pin_sup_5v0::set_low();
+			pin_sup_3v3::set_low();
 			m_vccio_drive_state = disabled;
 			if (m_vdd_com)
 				this->send_vccio_drive_list(*m_vdd_com);
@@ -627,6 +632,19 @@ public:
 			m_vccio_voltage = ADCA.CH0RESL;
 			m_vccio_voltage |= (ADCA.CH0RESH << 8);
 			ADCA.CH0.CTRL |= ADC_CH_START_bm;
+		}
+
+		if (ADCA.CH1.INTFLAGS & ADC_CH_CHIF_bm)
+		{
+			ADCA.CH1.INTFLAGS = ADC_CH_CHIF_bm;
+			m_vusb_voltage = ADCA.CH1RESL;
+			m_vusb_voltage |= (ADCA.CH1RESH << 8);
+			ADCA.CH1.CTRL |= ADC_CH_START_bm;
+
+			if (m_vusb_voltage < 1332) // 3.6V
+				pin_switched_pwr_en::set_high();
+			if (m_vusb_voltage > 1480) // 4V
+				pin_switched_pwr_en::set_low();
 		}
 
 		if (m_vccio_drive_state == active && m_vccio_drive_check_timeout)
@@ -1061,6 +1079,7 @@ private:
 	bool m_vccio_state_send_scheduled;
 
 	int16_t m_vccio_voltage;
+	int16_t m_vusb_voltage;
 	uint16_t m_com_app_speed;
 };
 
