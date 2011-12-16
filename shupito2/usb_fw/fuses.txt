@@ -1,0 +1,1 @@
+:writefuses cksel=0 sut=2 -ckdiv8 +bootrst -hwbe bodlevel=6 bootsz=3
