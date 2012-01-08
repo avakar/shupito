@@ -149,6 +149,31 @@ public:
 				}
 			}
 			break;
+		case 5: // WRITE 1'addr *'data
+			if (cp.size() != 0)
+			{
+				uint8_t addr = cp[0];
+				uint8_t err = 0;
+
+				// Repeatedly execute
+				//     MOV addr, #data
+				for (uint8_t i = 1; !err && i < cp.size(); ++i)
+				{
+					spi.send(0x53);
+					spi.send(0x75);
+					spi.send(addr & 0x7f);
+					spi.send(cp[i]);
+					spi.disable_tx();
+					err = this->read_byte();
+					spi.enable_tx();
+					++addr;
+				}
+
+				com.write(0x80);
+				com.write(0x51);
+				com.write(err);
+			}
+			break;
 		default:
 			return false;
 		}
