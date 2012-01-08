@@ -61,8 +61,8 @@ def descriptors():
                 ]
             ),
         0x300: LangidsDescriptor([0x409]),
-        0x301: StringDescriptor('Manufacturer Name'),
-        0x302: StringDescriptor('Product Name'),
+        0x301: StringDescriptor('Shupito'),
+        0x302: StringDescriptor('Shupito'),
         }
 
 def _main():
