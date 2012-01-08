@@ -65,8 +65,15 @@ open('desc.h', 'w').write(to_c(adler16(make_descriptor(UUID('093d7f32-cdc6-4928-
                     1,
                     (1<<12)
                     )),
-            Config(UUID('ee047e35-dec8-48ab-b194-e3762c8f6b66'), 1, 2,  # JTAG
-                data=struct.pack('<BI', 1, 32000000))
+            Config(UUID('ee047e35-dec8-48ab-b194-e3762c8f6b66'), 1, 4,  # JTAG
+                data=struct.pack('<BI', 1, 32000000)),
+            Config(UUID('76e37480-3f61-4e7a-9b1b-37af6bd418fa'), 1, 4,  # cc25xx
+                data=struct.pack('<BIHH',
+                    1, #version
+                    16000000,
+                    1,
+                    (1<<12)
+                    ))
         ),
         Config(UUID('356e9bf7-8718-4965-94a4-0be370c8797c'), 9, 1, flags=0x03,   # tunnel
             data=struct.pack('<BI', 1, 2000000)),

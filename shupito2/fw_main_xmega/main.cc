@@ -13,6 +13,7 @@
 
 
 #include "../../fw_common/handler_avricsp.hpp"
+#include "../../fw_common/handler_cc25xx.hpp"
 #include "../../fw_common/handler_xmega.hpp"
 #include "../../fw_common/handler_jtag.hpp"
 
@@ -198,8 +199,11 @@ public:
 	typedef uint8_t error_t;
 
 	void clear();
-	error_t start_master(uint16_t speed_khz);
+	error_t start_master(uint16_t speed_khz, bool sample_on_trailing);
 	uint8_t send(uint8_t v);
+	void enable_tx();
+	void disable_tx();
+	bool read_raw();
 };
 
 spi_t spi;
@@ -451,7 +455,7 @@ class context_t
 {
 public:
 	context_t()
-		: hxmega(pdi, clock), havricsp(spi, clock),
+		: hxmega(pdi, clock), havricsp(spi, clock), hcc25xx(spi, clock),
 		vdd_timeout(clock, clock_t::us<100000>::value), m_vccio_drive_check_timeout(clock, clock_t::us<200000>::value),
 		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_com_state(enabled), m_vccio_drive_state(enabled), m_vccio_state_send_scheduled(false),
 		m_vccio_voltage(0), m_vusb_voltage(0), m_com_app_speed((-1 << 12)|102 /*38400*/)
@@ -914,6 +918,9 @@ private:
 						case 2:
 							err = this->select_handler(handler_jtag);
 							break;
+						case 3:
+							err = this->select_handler(h_cc25xx);
+							break;
 						}
 
 						if (err == 0)
@@ -987,18 +994,6 @@ private:
 			avrlib::send(com, "Shupito v2.0\n");
 			cp.clear();
 			return true;
-		case 's':
-			avrlib::format(com, "state: %x\n") % pdi.state();
-			cp.clear();
-			return true;
-		case 'm':
-			vdd_timeout.start();
-			cp.clear();
-			return true;
-		case 'M':
-			vdd_timeout.cancel();
-			cp.clear();
-			return true;
 		case ' ':
 			this->set_vccio_drive(0);
 			cp.clear();
@@ -1024,7 +1019,7 @@ private:
 		return false;
 	}
 
-	enum handler_t { handler_none, handler_spi, handler_pdi, handler_jtag };
+	enum handler_t { handler_none, handler_spi, handler_pdi, handler_jtag, h_cc25xx };
 	uint8_t select_handler(handler_t h)
 	{
 		handler_base<com_writer_t> * new_handler;
@@ -1038,6 +1033,9 @@ private:
 			break;
 		case handler_jtag:
 			new_handler = &hjtag;
+			break;
+		case h_cc25xx:
+			new_handler = &hcc25xx;
 			break;
 		default:
 			new_handler = 0;
@@ -1066,6 +1064,7 @@ private:
 	handler_xmega<my_pdi_t, com_writer_t, clock_t, process_t> hxmega;
 	handler_avricsp<spi_t, com_writer_t, clock_t, pin_buf_rst, process_t> havricsp;
 	handler_jtagg<com_writer_t, pin_buf_rst, pin_buf_xck, pin_buf_rxd, pin_buf_txd, process_t> hjtag;
+	handler_cc25xx<spi_t, com_writer_t, clock_t, pin_buf_rst, pin_buf_xck, process_t> hcc25xx;
 	handler_base<com_writer_t> * handler;
 
 	avrlib::timeout<clock_t> vdd_timeout;
@@ -1105,7 +1104,7 @@ void spi_t::clear()
 	ctx.allow_com_app();
 }
 
-spi_t::error_t spi_t::start_master(uint16_t bsel)
+spi_t::error_t spi_t::start_master(uint16_t bsel, bool sample_on_trailing)
 {
 	ctx.disallow_com_app();
 
@@ -1116,7 +1115,7 @@ spi_t::error_t spi_t::start_master(uint16_t bsel)
 		--bsel;
 	USARTC1.BAUDCTRLA = bsel;
 	USARTC1.BAUDCTRLB = bsel >> 8;
-	USARTC1.CTRLC = USART_CMODE_MSPI_gc;
+	USARTC1.CTRLC = USART_CMODE_MSPI_gc | (sample_on_trailing? (1<<1): 0);
 	USARTC1.CTRLB = USART_RXEN_bm | USART_TXEN_bm;
 	return 0;
 }
@@ -1132,6 +1131,20 @@ uint8_t spi_t::send(uint8_t v)
 	return USARTC1.DATA;
 }
 
+void spi_t::enable_tx()
+{
+	pin_buf_txd::make_low();
+}
+
+void spi_t::disable_tx()
+{
+	pin_buf_txd::make_input();
+}
+
+bool spi_t::read_raw()
+{
+	return pin_buf_rxd::read();
+}
 
 int main()
 {
