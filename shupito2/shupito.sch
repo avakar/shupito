@@ -8816,15 +8816,15 @@ In this library the device names are the same as the pin names of the symbols, t
 <part name="JP24" library="pinhead_smd" deviceset="PINH1X01" device="SMD"/>
 <part name="Q7" library="transistors" deviceset="NPN-BIAS" device="-SOT323-BEC" value="PDTC123YU-1757992"/>
 <part name="Q8" library="transistors" deviceset="NPN-BIAS" device="-SOT323-BEC" value="PDTC123YU-1757992"/>
-<part name="L2" library="rcl" deviceset="R-US_" device="R0805" value="10uH-1463501"/>
+<part name="L2" library="rcl" deviceset="R-US_" device="R0805" value="10uH-1463501, 22uH-1612131"/>
 <part name="C13" library="rcl" deviceset="C-EU" device="C0603K" value="1u/25V-1759039"/>
 <part name="D2" library="diode" deviceset="DIODE" device="-SOD323" value="BAT42WS-1621831"/>
 <part name="Q10" library="transistors" deviceset="N-MOSFET" device="-SOT323-GSD" value="1758094"/>
 <part name="R1" library="rcl" deviceset="R-EU_" device="R0603" value="330"/>
-<part name="R2" library="rcl" deviceset="R-EU_" device="R0603" value="4k7"/>
+<part name="R2" library="rcl" deviceset="R-EU_" device="R0603" value="6k8"/>
 <part name="Q9" library="transistors" deviceset="PNP-BIAS" device="-SOT323-BEC" value="DTA144-1680214"/>
-<part name="R13" library="rcl" deviceset="R-EU_" device="R0603" value="15k 1%"/>
-<part name="R14" library="rcl" deviceset="R-EU_" device="R0603" value="1k 1%"/>
+<part name="R13" library="rcl" deviceset="R-EU_" device="R0603" value="22k 1%"/>
+<part name="R14" library="rcl" deviceset="R-EU_" device="R0603" value="1k5 1%"/>
 <part name="GND23" library="supply1" deviceset="GND" device=""/>
 <part name="IC6" library="xmega" deviceset="ATXMEGA*A4U" device="-AU" technology="32"/>
 <part name="GND5" library="supply1" deviceset="GND" device=""/>
