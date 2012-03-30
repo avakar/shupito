@@ -16,6 +16,7 @@
 #include "../../fw_common/handler_cc25xx.hpp"
 #include "../../fw_common/handler_xmega.hpp"
 #include "../../fw_common/handler_jtag.hpp"
+#include "../../fw_common/handler_spi.hpp"
 
 struct timer_xd0
 {
@@ -455,7 +456,7 @@ class context_t
 {
 public:
 	context_t()
-		: hxmega(pdi, clock), havricsp(spi, clock), hcc25xx(spi, clock),
+		: hxmega(pdi, clock), havricsp(spi, clock), hcc25xx(spi, clock), hspi(spi),
 		vdd_timeout(clock, clock_t::us<100000>::value), m_vccio_drive_check_timeout(clock, clock_t::us<200000>::value),
 		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_com_state(enabled), m_vccio_drive_state(enabled), m_vccio_state_send_scheduled(false),
 		m_vccio_voltage(0), m_vusb_voltage(0), m_com_app_speed((-1 << 12)|102 /*38400*/)
@@ -910,7 +911,7 @@ private:
 						switch (cp[2])
 						{
 						case 0:
-							err = this->select_handler(handler_spi);
+							err = this->select_handler(h_spi);
 							break;
 						case 1:
 							err = this->select_handler(handler_pdi);
@@ -920,6 +921,9 @@ private:
 							break;
 						case 3:
 							err = this->select_handler(h_cc25xx);
+							break;
+						case 4:
+							err = this->select_handler(h_gen_spi);
 							break;
 						}
 
@@ -1019,13 +1023,13 @@ private:
 		return false;
 	}
 
-	enum handler_t { handler_none, handler_spi, handler_pdi, handler_jtag, h_cc25xx };
+	enum handler_t { handler_none, h_spi, handler_pdi, handler_jtag, h_cc25xx, h_gen_spi };
 	uint8_t select_handler(handler_t h)
 	{
 		handler_base<com_writer_t> * new_handler;
 		switch (h)
 		{
-		case handler_spi:
+		case h_spi:
 			new_handler = &havricsp;
 			break;
 		case handler_pdi:
@@ -1036,6 +1040,9 @@ private:
 			break;
 		case h_cc25xx:
 			new_handler = &hcc25xx;
+			break;
+		case h_gen_spi:
+			new_handler = &hspi;
 			break;
 		default:
 			new_handler = 0;
@@ -1065,6 +1072,7 @@ private:
 	handler_avricsp<spi_t, com_writer_t, clock_t, pin_buf_rst, process_t> havricsp;
 	handler_jtagg<com_writer_t, pin_buf_rst, pin_buf_xck, pin_buf_rxd, pin_buf_txd, process_t> hjtag;
 	handler_cc25xx<spi_t, com_writer_t, clock_t, pin_buf_rst, pin_buf_xck, process_t> hcc25xx;
+	handler_spi<spi_t, com_writer_t, pin_buf_rst> hspi;
 	handler_base<com_writer_t> * handler;
 
 	avrlib::timeout<clock_t> vdd_timeout;

@@ -51,7 +51,7 @@ def adler16(s, mod=251):
 open('desc.h', 'w').write(to_c(adler16(make_descriptor(UUID('093d7f32-cdc6-4928-955d-513d17a85358'),
     And(
         Or(
-            Config(UUID('46dbc865-b4d0-466b-9b70-2f3f5b264e65'), 1, 8,  # SPI
+            Config(UUID('46dbc865-b4d0-466b-9b70-2f3f5b264e65'), 1, 8,  # ICSP
                 data=struct.pack('<BIHH',
                     1, # version
                     16000000,
@@ -70,6 +70,13 @@ open('desc.h', 'w').write(to_c(adler16(make_descriptor(UUID('093d7f32-cdc6-4928-
             Config(UUID('76e37480-3f61-4e7a-9b1b-37af6bd418fa'), 1, 5,  # cc25xx
                 data=struct.pack('<BIHH',
                     1, #version
+                    16000000,
+                    1,
+                    (1<<12)
+                    )),
+            Config(UUID('633125ab-32e0-49ec-b240-7d845bb70b2d'), 1, 3,  # SPI
+                data=struct.pack('<BIHH',
+                    1, # version
                     16000000,
                     1,
                     (1<<12)
