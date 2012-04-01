@@ -1,20 +1,13 @@
 #include <avr/io.h>
-#include <util/delay.h>
-
 #include <avr/pgmspace.h>
 
-#include "../../fw_common/avrlib/async_usart.hpp"
-#include "../../fw_common/avrlib/usart1.hpp"
-#include "../../fw_common/avrlib/format.hpp"
+#include "../../fw_common/avrlib/buffer.hpp"
 #include "../../fw_common/avrlib/bootseq.hpp"
-#include "../../fw_common/avrlib/counter.hpp"
+
+/*#include "../../fw_common/avrlib/counter.hpp"
 #include "../../fw_common/avrlib/timer1.hpp"
 
-typedef avrlib::async_usart<avrlib::usart1, 64, 64, avrlib::nobootseq> com_t;
-com_t com;
-ISR(USART1_RX_vect) { com.process_rx(); }
-
-/*typedef avrlib::counter<avrlib::timer1> clock_t;
+typedef avrlib::counter<avrlib::timer1> clock_t;
 clock_t clock;
 ISR(TIMER1_OVF_vect) { clock.tov_interrupt(); }*/
 
@@ -44,12 +37,21 @@ enum usb_request_types {
 
 #include "usb_descriptors.h"
 
-template <typename InStream>
+avrlib::buffer<uint8_t, 128> usart_to_usb_buffer;
+
+ISR(USART1_RX_vect)
+{
+	if (usart_to_usb_buffer.full())
+		UCSR1B = (1<<TXEN1)|(1<<RXCIE1);
+	else
+		usart_to_usb_buffer.push(UDR1);
+}
+
 class usb_t
 {
 public:
-	explicit usb_t(InStream & in)
-		: m_in(in), m_resets(0), m_sofs(0), m_enabled(false), m_enable_bootloader(true), last_intr(0), last_i1(0), last_i2(0xcc),
+	explicit usb_t()
+		: m_resets(0), m_sofs(0), m_enabled(false), m_enable_bootloader(true), last_intr(0), last_i1(0), last_i2(0xcc),
 		m_out_packet_pending(false)
 	{
 		m_ep0_transaction.m_request = 0xff;
@@ -142,32 +144,37 @@ public:
 
 		if (m_out_packet_pending)
 		{
-			while (com.tx_ready() && (UEINTX & (1<<RWAL)) != 0)
-				com.write(UEDATX);
-
-			if ((UEINTX & (1<<RWAL)) == 0)
+			for (;;)
 			{
-				UEINTX = (uint8_t)~(1<<FIFOCON);
-				m_out_packet_pending = false;
+				bool usb_empty = (UEINTX & (1<<RWAL)) == 0;
+				if (!usb_empty && (UCSR1A & (1<<UDRE1)) != 0)
+					UDR1 = UEDATX;
+					
+				if (usb_empty)
+				{
+					UEINTX = (uint8_t)~(1<<FIFOCON);
+					m_out_packet_pending = false;
+				}
 			}
 		}
 
 		UENUM = 4;
-		if (!m_in.empty() && UEINTX & (1<<TXINI))
+		if (!usart_to_usb_buffer.empty() && (UEINTX & (1<<TXINI)) != 0)
 		{
 			UEINTX = (uint8_t)~((1<<TXINI)|(1<<RXOUTI));
-			while (!m_in.empty() && (UEINTX & (1<<RWAL)) != 0)
+			uint8_t ch;
+			while ((UEINTX & (1<<RWAL)) != 0 && usart_to_usb_buffer.try_pop(ch))
 			{
-				uint8_t ch = m_in.read();
 				if (m_enable_bootloader)
 					m_bootseq.check(ch);
 				UEDATX = ch;
 			}
 			UEINTX = (uint8_t)~((1<<FIFOCON)|(1<<RXOUTI));
+
+			// Re-enable usart RX interrupt.
+			UCSR1B = (1<<RXEN1)|(1<<TXEN1)|(1<<RXCIE1);
 		}
 	}
-
-	InStream & m_in;
 
 	uint16_t m_resets, m_sofs;
 
@@ -355,6 +362,10 @@ private:
 	} m_ep0_transaction;
 };
 
+usb_t usb;
+
+//#include "../../fw_common/avrlib/format.hpp"
+
 int main()
 {
 	REGCR = (1<<REGDIS);
@@ -363,10 +374,10 @@ int main()
 
 	//clock.enable(avrlib::timer_fosc_8);
 
-	com.usart().open_sync_slave(true);
 	UCSR1D = (1<<CTSEN)|(1<<RTSEN);
+	UCSR1C = (1<<UMSEL10)|(1<<UCSZ11)|(1<<UCSZ10);
+	UCSR1B = (1<<RXEN1)|(1<<TXEN1)|(1<<RXCIE1);
 
-	usb_t<com_t> usb(com);
 	usb.init();
 
 	for (;;)
@@ -411,7 +422,13 @@ int main()
 			}
 		}*/
 
-		com.process_tx();
+		/*uint8_t ch;
+		if ((UCSR1A & (1<<UDRE1)) != 0
+			&& usb_to_uart_buffer.try_pop(ch))
+		{
+			UDR1 = ch;
+		}*/
+		
 		usb.process();
 	}
 }
