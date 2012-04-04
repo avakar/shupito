@@ -471,7 +471,6 @@ public:
 		pin_usb_rx::pullup();
 		pin_usb_cts_n::pulldown();
 		pin_usb_rtr_n::make_low();
-		//com_inner.usart().open(63, true, true /*synchronous*/);
 		com_inner.usart().open(15, true, true /*synchronous*/);
 
 		pin_bt_rx::pullup();

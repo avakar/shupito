@@ -42,7 +42,7 @@ avrlib::buffer<uint8_t, 128> usart_to_usb_buffer;
 ISR(USART1_RX_vect)
 {
 	if (usart_to_usb_buffer.full())
-		UCSR1B = (1<<TXEN1)|(1<<RXCIE1);
+		UCSR1B = (1<<RXEN1)|(1<<TXEN1);
 	else
 		usart_to_usb_buffer.push(UDR1);
 }
@@ -148,13 +148,18 @@ public:
 			{
 				bool usb_empty = (UEINTX & (1<<RWAL)) == 0;
 				if (!usb_empty && (UCSR1A & (1<<UDRE1)) != 0)
+				{
 					UDR1 = UEDATX;
-					
+					continue;
+				}
+
 				if (usb_empty)
 				{
 					UEINTX = (uint8_t)~(1<<FIFOCON);
 					m_out_packet_pending = false;
 				}
+
+				break;
 			}
 		}
 
