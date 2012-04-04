@@ -459,7 +459,7 @@ public:
 		: hxmega(pdi, clock), havricsp(spi, clock), hcc25xx(spi, clock), hspi(spi),
 		vdd_timeout(clock, clock_t::us<100000>::value), m_vccio_drive_check_timeout(clock, clock_t::us<200000>::value),
 		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_com_state(enabled), m_vccio_drive_state(enabled), m_vccio_state_send_scheduled(false),
-		m_vccio_voltage(0), m_vusb_voltage(0), m_com_app_speed((-1 << 12)|102 /*38400*/)
+		m_vccio_voltage(0), m_vusb_voltage(0), m_com_app_speed((-1 << 12)|102 /*38400*/), usb_test(false)
 	{
 		m_vccio_drive_check_timeout.cancel();
 	}
@@ -471,7 +471,8 @@ public:
 		pin_usb_rx::pullup();
 		pin_usb_cts_n::pulldown();
 		pin_usb_rtr_n::make_low();
-		com_inner.usart().open(63, true, true /*synchronous*/);
+		//com_inner.usart().open(63, true, true /*synchronous*/);
+		com_inner.usart().open(15, true, true /*synchronous*/);
 
 		pin_bt_rx::pullup();
 		pin_bt_tx::make_high();
@@ -514,6 +515,9 @@ public:
 
 	void run()
 	{
+		if (usb_test && com_inner.tx_ready())
+			com_inner.write(usb_phase++);
+
 		if (vdd_timeout)
 		{
 			vdd_timeout.restart();
@@ -766,7 +770,7 @@ private:
 						com.write(0x02);
 						com.write(0x02);
 						inner_redirected = false;
-						com_inner.usart().set_speed(63);
+						com_inner.usart().set_speed(15);
 					}
 					else if (cp.size() == 3 && cp[2] == 1)
 					{
@@ -998,16 +1002,8 @@ private:
 			avrlib::send(com, "Shupito v2.0\n");
 			cp.clear();
 			return true;
-		case ' ':
-			this->set_vccio_drive(0);
-			cp.clear();
-			return true;
-		case '1':
-			this->set_vccio_drive(1);
-			cp.clear();
-			return true;
-		case '2':
-			this->set_vccio_drive(2);
+		case 'u':
+			usb_test = !usb_test;
 			cp.clear();
 			return true;
 		case 254:
@@ -1063,6 +1059,9 @@ private:
 	}
 
 private:
+	bool usb_test;
+	uint8_t usb_phase;
+
 	bool inner_redirected;
 
 	avrlib::bootseq bootseq;
