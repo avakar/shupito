@@ -3,6 +3,10 @@
 
 #include "../../fw_common/avrlib/buffer.hpp"
 #include "../../fw_common/avrlib/bootseq.hpp"
+#include "../../fw_common/avrlib/usart1.hpp"
+#include "../../fw_common/avrlib/pin.hpp"
+#include "../../fw_common/avrlib/portd.hpp"
+#include "../../fw_common/avrlib/hwflow_usart.hpp"
 
 /*#include "../../fw_common/avrlib/counter.hpp"
 #include "../../fw_common/avrlib/timer1.hpp"
@@ -37,14 +41,13 @@ enum usb_request_types {
 
 #include "usb_descriptors.h"
 
-avrlib::buffer<uint8_t, 128> usart_to_usb_buffer;
+typedef avrlib::pin<avrlib::portd, 6> pin_rtr_n;
+typedef avrlib::pin<avrlib::portd, 7> pin_cts_n;
+avrlib::hwflow_usart<avrlib::usart1, 128, 64, avrlib::intr_enabled, pin_rtr_n, pin_cts_n> com;
 
 ISR(USART1_RX_vect)
 {
-	if (usart_to_usb_buffer.full())
-		UCSR1B = (1<<RXEN1)|(1<<TXEN1);
-	else
-		usart_to_usb_buffer.push(UDR1);
+	com.intr_rx();
 }
 
 class usb_t
@@ -147,9 +150,9 @@ public:
 			for (;;)
 			{
 				bool usb_empty = (UEINTX & (1<<RWAL)) == 0;
-				if (!usb_empty && (UCSR1A & (1<<UDRE1)) != 0)
+				if (!usb_empty && com.tx_ready())
 				{
-					UDR1 = UEDATX;
+					com.write(UEDATX);
 					continue;
 				}
 
@@ -164,20 +167,17 @@ public:
 		}
 
 		UENUM = 4;
-		if (!usart_to_usb_buffer.empty() && (UEINTX & (1<<TXINI)) != 0)
+		if (!com.empty() && (UEINTX & (1<<TXINI)) != 0)
 		{
 			UEINTX = (uint8_t)~((1<<TXINI)|(1<<RXOUTI));
-			uint8_t ch;
-			while ((UEINTX & (1<<RWAL)) != 0 && usart_to_usb_buffer.try_pop(ch))
+			while ((UEINTX & (1<<RWAL)) != 0 && !com.empty())
 			{
+				uint8_t ch = com.read();
 				if (m_enable_bootloader)
 					m_bootseq.check(ch);
 				UEDATX = ch;
 			}
 			UEINTX = (uint8_t)~((1<<FIFOCON)|(1<<RXOUTI));
-
-			// Re-enable usart RX interrupt.
-			UCSR1B = (1<<RXEN1)|(1<<TXEN1)|(1<<RXCIE1);
 		}
 	}
 
@@ -379,10 +379,9 @@ int main()
 
 	//clock.enable(avrlib::timer_fosc_8);
 
-	UCSR1D = (1<<CTSEN)|(1<<RTSEN);
-	UCSR1C = (1<<UMSEL10)|(1<<UCSZ11)|(1<<UCSZ10);
-	UCSR1B = (1<<RXEN1)|(1<<TXEN1)|(1<<RXCIE1);
+	pin_rtr_n::make_low();
 
+	com.usart().open_sync_slave(true);
 	usb.init();
 
 	for (;;)
@@ -435,5 +434,6 @@ int main()
 		}*/
 		
 		usb.process();
+		com.process_tx();
 	}
 }
