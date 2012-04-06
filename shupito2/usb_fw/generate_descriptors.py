@@ -4,7 +4,7 @@ from struct import pack
 def descriptors():
     return {
         0x100: DeviceDescriptor(
-            bcdUSB=0x200,
+            bcdUSB=0x110,
             bDeviceClass=0x02,
             bDeviceSubClass=0x00,
             bDeviceProtocol=0x00,
