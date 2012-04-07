@@ -108,7 +108,7 @@ fout.write(to_c(adler16(make_descriptor(UUID('093d7f32-cdc6-4928-955d-513d17a853
         Config(UUID('c49124d9-4629-4aef-ae35-ddc32c21b279'), 0, 0, flags=0x04,   # info
             data=(struct.pack('<BBBIh', 1,
                 2, 2, # hw version
-                timestamp, -zoffset) # fw timestamp
+                timestamp, -zoffset/60) # fw timestamp
                 + rev_hash)) # fw version
     )
 ))))
