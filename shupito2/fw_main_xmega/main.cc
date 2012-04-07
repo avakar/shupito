@@ -172,16 +172,19 @@ ISR(USARTC1_RXC_vect) { com_app.intr_rx(); }
 
 struct com_writer_t {
 	virtual void write(uint8_t value) {}
+	virtual bool tx_reserve(uint8_t value) { return false; }
 };
 
 struct com_inner_writer_t : com_writer_t
 {
 	virtual void write(uint8_t value) { com_inner.write(value); }
+	virtual bool tx_reserve(uint8_t size) { return com_inner.tx_reserve(size); }
 } com_inner_writer;
 
 struct com_outer_writer_t : com_writer_t
 {
 	virtual void write(uint8_t value) { com_outer.write(value); }
+	virtual bool tx_reserve(uint8_t size) { return com_outer.tx_reserve(size); }
 } com_outer_writer;
 
 void avrlib::assertion_failed(char const * message, char const * file, int line)
@@ -189,8 +192,14 @@ void avrlib::assertion_failed(char const * message, char const * file, int line)
 	cli();
 	pin_led::make_high();
 
+	clock_t::time_type base = clock.value();
 	for (;;)
 	{
+		if (clock.value() - base > clock_t::us<100000>::value)
+		{
+			pin_led::toggle();
+			base = clock.value();
+		}
 	}
 }
 
@@ -459,6 +468,7 @@ public:
 		: hxmega(pdi, clock), havricsp(spi, clock), hcc25xx(spi, clock), hspi(spi),
 		vdd_timeout(clock, clock_t::us<100000>::value), m_vccio_drive_check_timeout(clock, clock_t::us<200000>::value),
 		m_primary_com(0), m_vdd_com(0), m_app_com(0), m_app_com_state(enabled), m_vccio_drive_state(enabled), m_vccio_state_send_scheduled(false),
+		m_send_vccio_drive_list_scheduled(false),
 		m_vccio_voltage(0), m_vusb_voltage(0), m_com_app_speed((-1 << 12)|102 /*38400*/)
 	{
 		m_vccio_drive_check_timeout.cancel();
@@ -516,9 +526,9 @@ public:
 	{
 		if (vdd_timeout)
 		{
-			vdd_timeout.restart();
-			if (m_vdd_com)
+			if (m_vdd_com && m_vdd_com->tx_reserve(6))
 			{
+				vdd_timeout.restart();
 				m_vdd_com->write(0x80);
 				m_vdd_com->write(0xa4);
 				m_vdd_com->write(0x01);
@@ -526,19 +536,22 @@ public:
 				m_vdd_com->write(m_vccio_voltage);
 				m_vdd_com->write(m_vccio_voltage >> 8);
 			}
+			else
+			{
+				vdd_timeout.force();
+			}
 		}
 
 		if (m_vccio_state_send_scheduled)
 		{
-			m_vccio_state_send_scheduled = false;
-			this->send_vccio_state(m_vdd_com);
+			if (this->send_vccio_state(m_vdd_com))
+				m_vccio_state_send_scheduled = false;
 		}
 
 		if (m_vccio_drive_state == disabled && m_vccio_voltage < 111 && !pin_switched_pwr_en::get_value()) // 300mV
 		{
 			m_vccio_drive_state = enabled;
-			if (m_vdd_com)
-				this->send_vccio_drive_list(*m_vdd_com);
+			m_send_vccio_drive_list_scheduled = true;
 		}
 		if ((m_vccio_drive_state == enabled && m_vccio_voltage > 185) // 500mV
 			|| (m_vccio_drive_state != disabled && pin_switched_pwr_en::get_value()))
@@ -546,8 +559,13 @@ public:
 			pin_sup_5v0::set_low();
 			pin_sup_3v3::set_low();
 			m_vccio_drive_state = disabled;
-			if (m_vdd_com)
-				this->send_vccio_drive_list(*m_vdd_com);
+			m_send_vccio_drive_list_scheduled = true;
+		}
+
+		if (m_send_vccio_drive_list_scheduled && m_vdd_com)
+		{
+			if (this->send_vccio_drive_list(*m_vdd_com))
+				m_send_vccio_drive_list_scheduled = false;
 		}
 
 		if (inner_redirected && !com_inner.empty())
@@ -556,11 +574,14 @@ public:
 			if (size > 14)
 				size = 14;
 
-			com_outer.write(0x80);
-			com_outer.write(0x90 | (size + 1));
-			com_outer.write(0x02);
-			for (uint8_t i = 0; i < size; ++i)
-				com_outer.write(com_inner.read());
+			if (com_outer.tx_reserve(size + 3))
+			{
+				com_outer.write(0x80);
+				com_outer.write(0x90 | (size + 1));
+				com_outer.write(0x02);
+				for (uint8_t i = 0; i < size; ++i)
+					com_outer.write(com_inner.read());
+			}
 		}
 
 		if (!com_app.empty() && m_app_com)
@@ -569,11 +590,14 @@ public:
 			if (size > 14)
 				size = 14;
 
-			m_app_com->write(0x80);
-			m_app_com->write(0x90 | (size + 1));
-			m_app_com->write(0x01);
-			for (uint8_t i = 0; i < size; ++i)
-				m_app_com->write(com_app.read());
+			if (m_app_com->tx_reserve(size + 3))
+			{
+				m_app_com->write(0x80);
+				m_app_com->write(0x90 | (size + 1));
+				m_app_com->write(0x01);
+				for (uint8_t i = 0; i < size; ++i)
+					m_app_com->write(com_app.read());
+			}
 		}
 
 		if (!com_outer.empty())
@@ -808,16 +832,20 @@ private:
 		return false;
 	}
 
-	void send_vccio_state(com_writer_t * pCom)
+	bool send_vccio_state(com_writer_t * pCom)
 	{
 		if (!pCom)
-			return;
+			return true;
+
+		if (!pCom->tx_reserve(5))
+			return false;
 
 		pCom->write(0x80);
 		pCom->write(0xa3);
 		pCom->write(0x01);  // VCCIO
 		pCom->write(0x01);  // get_drive
 		pCom->write(pin_sup_3v3::get_value()? 0x01: pin_sup_5v0::get_value()? 0x02: 0x00);
+		return true;
 	}
 
 	void set_vccio_drive(uint8_t value)
@@ -844,8 +872,11 @@ private:
 		m_vccio_state_send_scheduled = true;
 	}
 
-	void send_vccio_drive_list(com_writer_t & com)
+	bool send_vccio_drive_list(com_writer_t & com)
 	{
+		if (!com.tx_reserve(m_vccio_drive_state != disabled? 0x10: 0x08))
+			return false;
+
 		com.write(0x80);
 		com.write(m_vccio_drive_state != disabled? 0xae: 0xa6);
 		com.write(0x00);
@@ -866,6 +897,8 @@ private:
 			com.write(0x64);
 			com.write(0x00);
 		}
+
+		return true;
 	}
 
 	bool process_command(avrlib::command_parser & cp, com_writer_t & com)
@@ -1072,6 +1105,7 @@ private:
 
 	enum { disabled, enabled, active } m_app_com_state, m_vccio_drive_state;
 	bool m_vccio_state_send_scheduled;
+	bool m_send_vccio_drive_list_scheduled;
 
 	int16_t m_vccio_voltage;
 	int16_t m_vusb_voltage;
