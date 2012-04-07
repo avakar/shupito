@@ -1,4 +1,4 @@
-import struct
+import struct, sys
 from uuid import UUID
 
 class And:
@@ -48,7 +48,24 @@ def adler16(s, mod=251):
         c1 = (c1 + c0) % mod
     return s + chr(c0) + chr(c1)
 
-open('desc.h', 'w').write(to_c(adler16(make_descriptor(UUID('093d7f32-cdc6-4928-955d-513d17a85358'),
+import subprocess
+rev_hash = subprocess.check_output(['hg', 'log', '-r', '.', '--template', '{node|short}'])
+rev_date = subprocess.check_output(['hg', 'log', '-r', '.', '--template', '{date|hgdate}'])
+hg_log = subprocess.check_output(['hg', 'log', '-r', '.'])
+hg_log = [line for line in hg_log.split('\n') if line]
+hg_log = '// ' + '\n// '.join(hg_log) + '\n\n'
+
+from base64 import b16decode
+rev_hash = b16decode(rev_hash, casefold=True)
+timestamp, zoffset = [int(x) for x in rev_date.split(' ')]
+
+if len(sys.argv) < 2:
+    fout = sys.stdout
+else:
+    fout = open(sys.argv[1], 'w')
+
+fout.write(hg_log)
+fout.write(to_c(adler16(make_descriptor(UUID('093d7f32-cdc6-4928-955d-513d17a85358'),
     And(
         Or(
             Config(UUID('46dbc865-b4d0-466b-9b70-2f3f5b264e65'), 1, 8,  # ICSP
@@ -87,6 +104,13 @@ open('desc.h', 'w').write(to_c(adler16(make_descriptor(UUID('093d7f32-cdc6-4928-
         Config(UUID('1d4738a0-fc34-4f71-aa73-57881b278cb1'), 10, 1, flags=0x00,  # measurement
             data=struct.pack('<BI',
                 1, # version
-                0x0002B401)) # 16.16 fixpoint millivolts per unit
+                0x0002B401)), # 16.16 fixpoint millivolts per unit
+        Config(UUID('c49124d9-4629-4aef-ae35-ddc32c21b279'), 0, 0, flags=0x04,   # info
+            data=(struct.pack('<BBBIh', 1,
+                2, 2, # hw version
+                timestamp, -zoffset) # fw timestamp
+                + rev_hash)) # fw version
     )
 ))))
+
+fout.close()
