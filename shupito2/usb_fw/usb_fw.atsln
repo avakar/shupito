@@ -1,0 +1,17 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# AvrStudio Solution File, Format Version 11.00
+Project("{E66E83B9-2572-4076-B26E-6BE79FF3018A}") = "usb_fw", "usb_fw.cppproj", "{DECDEAEC-D15A-4EFB-B127-9FE6E6A34111}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Release|AVR = Release|AVR
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DECDEAEC-D15A-4EFB-B127-9FE6E6A34111}.Release|AVR.ActiveCfg = Release|AVR
+		{DECDEAEC-D15A-4EFB-B127-9FE6E6A34111}.Release|AVR.Build.0 = Release|AVR
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
