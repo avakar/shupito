@@ -167,7 +167,7 @@ def print_descriptors(fout, descriptors):
         oldlen = len(data)
         data += value
         fout.write('    { 0x%03x, 0x%03x, 0x%03x }, // length: 0x%03x (%d)\n' % (key, oldlen, len(data), len(data) - oldlen, len(data) - oldlen))
-    fout.write('};\n\nstatic prog_uint8_t const usb_descriptors[] PROGMEM = {\n')
+    fout.write('};\n\nstatic uint8_t const usb_descriptors[] PROGMEM = {\n')
 
     while data:
         line = '    '

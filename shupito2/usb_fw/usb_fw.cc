@@ -360,8 +360,8 @@ private:
 		{
 			struct
 			{
-				prog_uint8_t const * pFirst;
-				prog_uint8_t const * pLast;
+				uint8_t const * pFirst;
+				uint8_t const * pLast;
 			} m_get_descriptor;
 		};
 	} m_ep0_transaction;
