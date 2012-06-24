@@ -5,15 +5,16 @@ def descriptors():
     return {
         0x100: DeviceDescriptor(
             bcdUSB=0x110,
-            bDeviceClass=0x02,
-            bDeviceSubClass=0x00,
-            bDeviceProtocol=0x00,
+            bDeviceClass=0xff,
+            bDeviceSubClass=0xff,
+            bDeviceProtocol=0xff,
             bMaxPacketSize0=32,
             idVendor=0x4a61,
             idProduct=0x679a,
             bcdDevice=0x0001,
-            iManufacturer=1,
-            iProduct=2,
+            iManufacturer=0,
+            iProduct=1,
+            iSerialNumber=0,
             bNumConfigurations=1
             ),
         0x200: ConfigurationDescriptor(
@@ -62,7 +63,6 @@ def descriptors():
             ),
         0x300: LangidsDescriptor([0x409]),
         0x301: StringDescriptor('Shupito'),
-        0x302: StringDescriptor('Shupito'),
         }
 
 def _main():
