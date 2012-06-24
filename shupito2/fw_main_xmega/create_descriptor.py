@@ -49,9 +49,9 @@ def adler16(s, mod=251):
     return s + chr(c0) + chr(c1)
 
 import subprocess
-rev_hash = subprocess.check_output(['hg', 'log', '-r', '.', '--template', '{node|short}'])
-rev_date = subprocess.check_output(['hg', 'log', '-r', '.', '--template', '{date|hgdate}'])
-hg_log = subprocess.check_output(['hg', 'log', '-r', '.'])
+rev_hash = subprocess.check_output(['hg', 'log', '-r', '.', '--color=no', '--template', '{node|short}'])
+rev_date = subprocess.check_output(['hg', 'log', '-r', '.', '--color=no', '--template', '{date|hgdate}'])
+hg_log = subprocess.check_output(['hg', 'log', '-r', '.', '--color=no'])
 hg_log = [line for line in hg_log.split('\n') if line]
 hg_log = '// ' + '\n// '.join(hg_log) + '\n\n'
 
