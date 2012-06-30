@@ -37,7 +37,8 @@ enum usb_request_types {
 	urt_set_configuration      = 0x0009,
 	urt_set_line_conding       = 0x2120,
 	urt_get_line_conding       = 0xA121,
-	urt_set_control_line_state = 0x2122
+	urt_set_control_line_state = 0x2122,
+	urt_reset_to_booloader     = 0x4001,
 };
 
 #include "usb_descriptors.h"
@@ -289,6 +290,10 @@ private:
 			UEINTX = ~(1<<TXINI);
 			break;
 
+		case urt_reset_to_booloader:
+			avrlib::bootseq_reset();
+			break;
+
 		default:
 			UECONX = (1<<STALLRQ)|(1<<EPEN);
 			ep0_tran.request = 0;
@@ -305,6 +310,9 @@ private:
 				m_dte_rate |= uint32_t(UEDATX) << 8;
 				m_dte_rate |= uint32_t(UEDATX) << 16;
 				m_dte_rate |= uint32_t(UEDATX) << 24;
+
+				if (m_dte_rate == 0x337A7E74)
+					avrlib::bootseq_reset();
 
 				g_enable_bootloader = (m_dte_rate == 1234);
 			}
