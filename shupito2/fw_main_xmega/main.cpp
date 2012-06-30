@@ -1,5 +1,6 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <avr/pgmspace.h>
 #include "../../fw_common/avrlib/command_parser.hpp"
 #include "../../fw_common/avrlib/async_usart.hpp"
 #include "../../fw_common/avrlib/hwflow_usart.hpp"
@@ -84,6 +85,7 @@ AVRLIB_MAKE_XMEGA_PIN(pin_usb_xck,   PORTD, 5);
 AVRLIB_MAKE_XMEGA_PIN(pin_usb_rx,    PORTD, 6);
 AVRLIB_MAKE_XMEGA_PIN(pin_usb_tx,    PORTD, 7);
 
+AVRLIB_MAKE_XMEGA_PIN(pin_sysclk, PORTE, 1);
 AVRLIB_MAKE_XMEGA_PIN(pin_bt_rx, PORTE, 2);
 AVRLIB_MAKE_XMEGA_PIN(pin_bt_tx, PORTE, 3);
 
@@ -479,9 +481,31 @@ public:
 		pin_usb_xck::make_low();
 		pin_usb_tx::make_high();
 		pin_usb_rx::pullup();
-		pin_usb_cts_n::pulldown();
-		pin_usb_rtr_n::make_low();
+		pin_usb_cts_n::pullup();
 		com_inner.usart().open(15, true, true /*synchronous*/);
+		pin_usb_rtr_n::make_low();
+
+		com_inner.write(0x80);
+		com_inner.write(0xec);
+		com_inner.write(0x0b);
+		
+		NVM_PROD_SIGNATURES_t * prod = 0;
+		NVM_CMD = NVM_CMD_READ_CALIB_ROW_gc;
+		com_inner.write(pgm_read_byte(&prod->LOTNUM0));
+		com_inner.write(pgm_read_byte(&prod->LOTNUM1));
+		com_inner.write(pgm_read_byte(&prod->LOTNUM2));
+		com_inner.write(pgm_read_byte(&prod->LOTNUM3));
+		com_inner.write(pgm_read_byte(&prod->LOTNUM4));
+		com_inner.write(pgm_read_byte(&prod->LOTNUM5));
+		com_inner.write(pgm_read_byte(&prod->WAFNUM));
+		com_inner.write(pgm_read_byte(&prod->COORDX0));
+		com_inner.write(pgm_read_byte(&prod->COORDX1));
+		com_inner.write(pgm_read_byte(&prod->COORDY0));
+		com_inner.write(pgm_read_byte(&prod->COORDY1));
+		
+		ADCA.CALL = pgm_read_byte(&prod->ADCACAL0);
+		ADCA.CALH = pgm_read_byte(&prod->ADCACAL1);
+		NVM_CMD = NVM_CMD_NO_OPERATION_gc;
 
 		pin_bt_rx::pullup();
 		pin_bt_tx::make_high();
@@ -766,6 +790,7 @@ private:
 						com.write(0x02);
 						inner_redirected = true;
 						com_inner.usart().set_speed(639);
+						pin_usb_cts_n::pulldown();
 					}
 					else if (cp.size() == 5 && cp[2] == 'a' && cp[3] == 'p' && cp[4] == 'p' && m_app_com_state != disabled)
 					{
@@ -791,6 +816,7 @@ private:
 						com.write(0x02);
 						inner_redirected = false;
 						com_inner.usart().set_speed(15);
+						pin_usb_cts_n::pullup();
 					}
 					else if (cp.size() == 3 && cp[2] == 1)
 					{
@@ -1178,7 +1204,8 @@ bool spi_t::read_raw()
 
 int main()
 {
-	PORTD.DIRSET = (1<<3);
+	pin_usb_rtr_n::make_high();
+	pin_sysclk::make_low();
 
 	// Run at 32MHz
 	OSC.CTRL = OSC_RC32MEN_bm | OSC_RC2MEN_bm | OSC_RC32KEN_bm;
@@ -1201,8 +1228,6 @@ int main()
 	TCE0.CCAH = 0;
 	TCE0.CTRLB = TC0_CCBEN_bm | TC_WGMODE_FRQ_gc;
 	TCE0.CTRLA = TC_CLKSEL_DIV1_gc;
-
-	PORTE.DIRSET = (1<<1);
 
 	PMIC.CTRL = PMIC_HILVLEN_bm | PMIC_MEDLVLEN_bm | PMIC_LOLVLEN_bm;
 	sei();

@@ -14,7 +14,7 @@ def descriptors():
             bcdDevice=0x0001,
             iManufacturer=0,
             iProduct=1,
-            iSerialNumber=0,
+            iSerialNumber=2,
             bNumConfigurations=1
             ),
         0x200: ConfigurationDescriptor(

@@ -7,13 +7,10 @@
 #include "../../fw_common/avrlib/pin.hpp"
 #include "../../fw_common/avrlib/portd.hpp"
 #include "../../fw_common/avrlib/hwflow_usart.hpp"
+//#include "../../fw_common/avrlib/format.hpp"
 
-/*#include "../../fw_common/avrlib/counter.hpp"
 #include "../../fw_common/avrlib/timer1.hpp"
-
-typedef avrlib::counter<avrlib::timer1> clock_t;
-clock_t clock;
-ISR(TIMER1_OVF_vect) { clock.tov_interrupt(); }*/
+typedef avrlib::timer1 clock_t;
 
 #define EPTYPE_CONTROL 0
 #define EPTYPE_ISOCHRONOUS 1
@@ -33,17 +30,31 @@ ISR(TIMER1_OVF_vect) { clock.tov_interrupt(); }*/
 
 
 enum usb_request_types {
-	urt_get_status = 0,
-	urt_set_address = 5,
-	urt_get_descriptor = 6,
-	urt_set_configuration = 9,
+	urt_no_request             = 0,
+	urt_get_status             = 0x8000,
+	urt_set_address            = 0x0005,
+	urt_get_descriptor         = 0x8006,
+	urt_set_configuration      = 0x0009,
+	urt_set_line_conding       = 0x2120,
+	urt_get_line_conding       = 0xA121,
+	urt_set_control_line_state = 0x2122
 };
 
 #include "usb_descriptors.h"
 
+typedef avrlib::pin<avrlib::portd, 2> pin_usb_rx;
+typedef avrlib::pin<avrlib::portd, 3> pin_usb_tx;
+typedef avrlib::pin<avrlib::portd, 5> pin_usb_xck;
 typedef avrlib::pin<avrlib::portd, 6> pin_rtr_n;
 typedef avrlib::pin<avrlib::portd, 7> pin_cts_n;
 avrlib::hwflow_usart<avrlib::usart1, 128, 64, avrlib::intr_enabled, pin_rtr_n, pin_cts_n> com;
+
+uint8_t g_serial_no_len;
+uint8_t g_serial_no[14];
+
+avrlib::bootseq g_bootseq;
+bool g_enable_bootloader = true;
+
 
 ISR(USART1_RX_vect)
 {
@@ -54,10 +65,10 @@ class usb_t
 {
 public:
 	explicit usb_t()
-		: m_resets(0), m_sofs(0), m_enabled(false), m_enable_bootloader(true), last_intr(0), last_i1(0), last_i2(0xcc),
-		m_out_packet_pending(false)
+		: m_resets(0), m_sofs(0), m_enabled(false), last_intr(0), last_i1(0), last_i2(0xcc),
+		m_out_packet_pending(false), m_dte_rate(1234)
 	{
-		m_ep0_transaction.m_request = 0xff;
+		ep0_tran.request = urt_no_request;
 	}
 
 	void init()
@@ -94,7 +105,6 @@ public:
 		{
 			UDINT = ~(1<<EORSTI);
 			configure_ep0();
-			//send(com, "RESET\r\n");
 		}
 
 		UENUM = 0;
@@ -114,10 +124,14 @@ public:
 
 			UEINTX = ~(1<<RXSTPI);
 
-			ep0_setup(bmRequestType, bRequest, wValue, wIndex, wLength);
+			ep0_tran.request = (bmRequestType << 8) | bRequest;
+			ep0_tran.wValue = wValue;
+			ep0_tran.wIndex = wIndex;
+			ep0_tran.wLength = wLength;
+			ep0_setup();
 		}
 
-		if (m_ep0_transaction.m_request != 0xff && (UEINTX & (1<<TXINI)) != 0)
+		if (ep0_tran.request != urt_no_request && (UEINTX & (1<<TXINI)) != 0)
 		{
 			ep0_in_ack();
 		}
@@ -134,11 +148,8 @@ public:
 			UEINTX = ~(1<<NAKINI);
 		}
 
-
 		UENUM = 3;
-
 		UEINTX = ~(1<<NAKOUTI);
-		
 		if (!m_out_packet_pending && (UEINTX & (1<<RXOUTI)) != 0)
 		{
 			UEINTX = ~(1<<RXOUTI);
@@ -173,8 +184,8 @@ public:
 			while ((UEINTX & (1<<RWAL)) != 0 && !com.empty())
 			{
 				uint8_t ch = com.read();
-				if (m_enable_bootloader)
-					m_bootseq.check(ch);
+				if (g_enable_bootloader)
+					g_bootseq.check(ch);
 				UEDATX = ch;
 			}
 			UEINTX = (uint8_t)~((1<<FIFOCON)|(1<<RXOUTI));
@@ -184,16 +195,16 @@ public:
 	uint16_t m_resets, m_sofs;
 
 private:
-	bool m_enabled, m_enable_bootloader;
+	bool m_enabled;
 	uint8_t last_intr, last_i1, last_i2;
 	bool m_out_packet_pending;
-	avrlib::bootseq m_bootseq;
+	uint32_t m_dte_rate;
 
 	void configure_ep0()
 	{
 		UENUM = 0;
 
-		// XXX: The endpoint 0 is not automatically enabled after USB reset as specificed in the datasheet.
+		// The endpoint 0 is not automatically enabled after USB reset as specified in the datasheet!
 		UECONX = (1<<EPEN);
 
 		// The endpoint 0 should already be enabled.
@@ -201,11 +212,11 @@ private:
 		UECFG1X = (EPSIZE_32<<4)|(1<<ALLOC);
 	}
 
-	void ep0_setup(uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint16_t wLength)
+	void ep0_setup()
 	{
-		m_ep0_transaction.m_request = bRequest;
+		//format(com, "SETUP %x %x:%x %x\r\n") % ep0_tran.request % ep0_tran.wValue % ep0_tran.wIndex % ep0_tran.wLength;
 
-		switch (bRequest)
+		switch (ep0_tran.request)
 		{
 		case urt_get_status:
 			UEDATX = 0;
@@ -213,37 +224,46 @@ private:
 			UEINTX = ~(1<<TXINI);
 			break;
 		case urt_set_address:
-			UDADDR = wValue & 0x7f;
+			UDADDR = ep0_tran.wValue & 0x7f;
 			UEINTX = ~(1<<TXINI);
 			break;
 		case urt_get_descriptor:
+			if (ep0_tran.wValue == 0x302)
 			{
-				m_ep0_transaction.m_get_descriptor.pFirst = 0;
-				m_ep0_transaction.m_get_descriptor.pLast = 0;
+				ep0_tran.get_desc_302.pos = 2;
+				ep0_tran.get_desc_302.length = 4*g_serial_no_len + 2;
+				UEDATX = ep0_tran.get_desc_302.length;
+				UEDATX = 3;
+
+				if (ep0_tran.wLength < ep0_tran.get_desc_302.length)
+					ep0_tran.get_desc_302.length = ep0_tran.wLength;
+			}
+			else
+			{
+				ep0_tran.get_desc.first = 0;
+				ep0_tran.get_desc.last = 0;
 
 				for (uint8_t i = 0; i < sizeof usb_descriptors / sizeof usb_descriptors[0]; ++i)
 				{
-					if (usb_descriptor_map[i].index == wValue)
+					if (usb_descriptor_map[i].index == ep0_tran.wValue)
 					{
-						m_ep0_transaction.m_get_descriptor.pFirst = usb_descriptors + usb_descriptor_map[i].first;
-						m_ep0_transaction.m_get_descriptor.pLast = usb_descriptors + usb_descriptor_map[i].last;
+						ep0_tran.get_desc.first = usb_descriptors + usb_descriptor_map[i].first;
+						ep0_tran.get_desc.last = usb_descriptors + usb_descriptor_map[i].last;
 						break;
 					}
 				}
 
-				if (m_ep0_transaction.m_get_descriptor.pFirst == 0)
+				if (ep0_tran.get_desc.first == 0)
 				{
 					UECONX = (1<<STALLRQ)|(1<<EPEN);
-					m_ep0_transaction.m_request = 0xff;
+					ep0_tran.request = urt_no_request;
 					return;
 				}
 
 				// Make sure that at most the requested amount of data gets transmitted.
-				if (uint16_t(m_ep0_transaction.m_get_descriptor.pLast - m_ep0_transaction.m_get_descriptor.pFirst) > wLength)
-					m_ep0_transaction.m_get_descriptor.pLast = m_ep0_transaction.m_get_descriptor.pFirst + wLength;
+				if (uint16_t(ep0_tran.get_desc.last - ep0_tran.get_desc.first) > ep0_tran.wLength)
+					ep0_tran.get_desc.last = ep0_tran.get_desc.first + ep0_tran.wLength;
 			}
-
-			ep0_in_ack();
 			break;
 
 		case urt_set_configuration:
@@ -251,40 +271,46 @@ private:
 			UEINTX = ~(1<<TXINI);
 			break;
 
-		case 0x20: // SET_LINE_CODING
-			//send(com, "set_line_coding setup\r\n");
+		case urt_set_line_conding:
 			break;
-		
-		case 0x22: // SET_CONTROL_LINE_STATE
+
+		case urt_get_line_conding:
+			UEDATX = m_dte_rate;
+			UEDATX = m_dte_rate >> 8;
+			UEDATX = m_dte_rate >> 16;
+			UEDATX = m_dte_rate >> 24;
+			UEDATX = 0;
+			UEDATX = 0;
+			UEDATX = 8;
+			UEINTX = ~(1<<TXINI);
+			break;
+
+		case urt_set_control_line_state:
 			UEINTX = ~(1<<TXINI);
 			break;
 
 		default:
-			//format(com, "SETUP %x:%x %x:%x %x\r\n") % bmRequestType % bRequest % wValue % wIndex % wLength;
 			UECONX = (1<<STALLRQ)|(1<<EPEN);
-			m_ep0_transaction.m_request = 0xff;
+			ep0_tran.request = 0;
 		}
 	}
 
 	void ep0_out()
 	{
-		//send(com, "out\r\n");
-		switch (m_ep0_transaction.m_request)
+		switch (ep0_tran.request)
 		{
-		case 0x20: // SET_LINE_CODING
+		case urt_set_line_conding:
 			{
-				uint32_t dte_rate = UEDATX;
-				dte_rate |= uint32_t(UEDATX) << 8;
-				dte_rate |= uint32_t(UEDATX) << 16;
-				dte_rate |= uint32_t(UEDATX) << 24;
+				m_dte_rate = UEDATX;
+				m_dte_rate |= uint32_t(UEDATX) << 8;
+				m_dte_rate |= uint32_t(UEDATX) << 16;
+				m_dte_rate |= uint32_t(UEDATX) << 24;
 
-				m_enable_bootloader = dte_rate == 1234;
-
-				//format(com, "set_line_conding %x\r\n") % dte_rate;
+				g_enable_bootloader = (m_dte_rate == 1234);
 			}
 			UEINTX = ~(1<<RXOUTI);
 
-			m_ep0_transaction.m_request = 0xff;
+			ep0_tran.request = urt_no_request;
 			UEINTX = ~(1<<TXINI);
 			break;
 		default:
@@ -294,43 +320,65 @@ private:
 
 	void ep0_in_ack()
 	{
-		switch (m_ep0_transaction.m_request)
+		switch (ep0_tran.request)
 		{
 		case urt_get_descriptor:
+			uint8_t buf_left;
+			if (ep0_tran.wValue == 0x302)
 			{
-				uint8_t packet_size = 0;
-				for (; packet_size < 32
-					&& m_ep0_transaction.m_get_descriptor.pFirst != m_ep0_transaction.m_get_descriptor.pLast;
-					++m_ep0_transaction.m_get_descriptor.pFirst)
+				uint8_t pos = ep0_tran.get_desc_302.pos;
+				buf_left = 32 - (pos % 32);
+
+				for (; pos < ep0_tran.get_desc_302.length && buf_left; ++pos, --buf_left)
 				{
-					UEDATX = pgm_read_byte(m_ep0_transaction.m_get_descriptor.pFirst);
-					++packet_size;
+					uint8_t pos2 = pos - 2;
+					if (pos2 & 1)
+					{
+						UEDATX = 0;
+					}
+					else
+					{
+						static const uint8_t digits[] = "0123456789abcdef";
+						uint8_t val = g_serial_no[pos2/4];
+						UEDATX = digits[(pos2 & 2)?(val & 0xf):(val >> 4)];
+					}
 				}
-
-				UEINTX = ~(1<<TXINI);
-
-				if (packet_size < 32)
-					m_ep0_transaction.m_request = 0xff;
+				ep0_tran.get_desc_302.pos = pos;
 			}
+			else 
+			{
+				buf_left = 32;
+				
+				uint8_t const * pos = ep0_tran.get_desc.first;
+				uint8_t const * last = ep0_tran.get_desc.last;
+				for (; pos != last && buf_left; ++pos, --buf_left)
+				{
+					UEDATX = pgm_read_byte(pos);
+				}
+				ep0_tran.get_desc.first = pos;
+			}
+
+			if (buf_left)
+				ep0_tran.request = urt_no_request;
+			UEINTX = ~(1<<TXINI);
 			break;
 
 		case urt_set_address:
 			UDADDR |= (1<<ADDEN);
-			m_ep0_transaction.m_request = 0xff;
+			ep0_tran.request = urt_no_request;
 			break;
 
-		case 0x20:
+		case urt_set_line_conding:
 			break;
 
+		case urt_get_line_conding:
 		default:
-			m_ep0_transaction.m_request = 0xff;
+			ep0_tran.request = urt_no_request;
 		}
 	}
 
 	void set_config()
 	{
-		//send(com, "set_config\r\n");
-
 		UERST = (1<<1)|(1<<3)|(1<<4);
 		UERST = 0;
 
@@ -355,21 +403,28 @@ private:
 
 	struct ep0_transaction_t
 	{
-		uint8_t m_request;
+		uint16_t request;
+		uint16_t wIndex;
+		uint16_t wValue;
+		uint16_t wLength;
+
 		union
 		{
 			struct
 			{
-				uint8_t const * pFirst;
-				uint8_t const * pLast;
-			} m_get_descriptor;
+				uint8_t pos;
+				uint8_t length;
+			} get_desc_302;
+			struct
+			{
+				uint8_t const * first;
+				uint8_t const * last;
+			} get_desc;
 		};
-	} m_ep0_transaction;
+	} ep0_tran;
 };
 
 usb_t usb;
-
-//#include "../../fw_common/avrlib/format.hpp"
 
 int main()
 {
@@ -377,62 +432,66 @@ int main()
 
 	sei();
 
-	//clock.enable(avrlib::timer_fosc_8);
-
+	pin_usb_rx::pullup();
+	pin_usb_xck::pullup();
+	pin_cts_n::pullup();
+	com.usart().open_sync_slave(true);
 	pin_rtr_n::make_low();
 
-	com.usart().open_sync_slave(true);
+	// Wait a little bit for the master to send a config packet
+	// with our serial number.
+	clock_t::value(0);
+	clock_t::clock_source(avrlib::timer_fosc_256);
+
+	static uint16_t const config_timeout = 12500;
+	bool wait_for_more_config = true;
+
+	uint8_t serial_no_len = 0xff;
+	uint8_t serial_no_pos = 0;
+	while (wait_for_more_config)
+	{
+		while (clock_t::value() < config_timeout && com.read_size() < 2)
+		{
+		}
+
+		if (com.read_size() < 2 || com[0] != 0x80 || (com[1] & 0xf0) != 0xe0)
+			break;
+
+		uint8_t size = 2 + (com[1] & 0xf);
+		while (clock_t::value() < config_timeout && com.read_size() < size)
+		{
+		}
+
+		if (com.read_size() < size)
+			break;
+
+		com.read();
+		com.read();
+
+		uint8_t i = 2;
+		if (serial_no_len == 0xff)
+		{
+			if (size < 3)
+				break;
+			serial_no_len = com.read();
+			++i;
+			if (serial_no_len > sizeof(g_serial_no))
+				break;
+		}
+
+		for (; i < size && serial_no_pos < serial_no_len; ++i, ++serial_no_pos)
+			g_serial_no[serial_no_pos] = com.read();
+
+		wait_for_more_config = (size == 17);
+	}
+
+	if (!wait_for_more_config)
+		g_serial_no_len = serial_no_pos;
+
 	usb.init();
 
 	for (;;)
 	{
-		/*if (!com.empty())
-		{
-			char ch = com.read();
-			switch (ch)
-			{
-			case 't':
-				avrlib::format(com, "clock: %x\n") % clock.value();
-				break;
-			case 'x':
-				avrlib::format(com,
-					"CLKSEL0: %x\n"
-					"CLKSEL1: %x\n"
-					"CLKSTA: %x\n"
-					"CLKPR: %x\n"
-					"PLLCSR: %x\n"
-					) % CLKSEL0 % CLKSEL1 % CLKSTA % CLKPR % PLLCSR;
-				break;
-			case '?':
-			default:
-				{
-					send(com, "Shupito USB comm chip.\r\n");
-
-					for (uint8_t i = 0; i < 5; ++i)
-					{
-						UENUM = i;
-						static prog_char const fmt[] PROGMEM =
-							"----\r\nUENUM: %x\r\n"
-							"UECONX: %x\r\n"
-							"UECFG0X: %x\r\n"
-							"UECFG1X: %x\r\n"
-							"UESTA0X: %x\r\n"
-							"UESTA1X: %x\r\n"
-							"UEINTX: %x\r\n"
-							"UEBCLX: %x\r\n";
-						avrlib::format_pgm(com,fmt) % i % UECONX % UECFG0X % UECFG1X % UESTA0X % UESTA1X % UEINTX % UEBCLX;
-					}
-				}
-			}
-		}*/
-
-		/*uint8_t ch;
-		if ((UCSR1A & (1<<UDRE1)) != 0
-			&& usb_to_uart_buffer.try_pop(ch))
-		{
-			UDR1 = ch;
-		}*/
-		
 		usb.process();
 		com.process_tx();
 	}
