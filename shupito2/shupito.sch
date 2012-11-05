@@ -8819,7 +8819,7 @@ In this library the device names are the same as the pin names of the symbols, t
 <part name="L2" library="rcl" deviceset="R-US_" device="R0805" value="10uH-1463501, 22uH-1612131"/>
 <part name="C13" library="rcl" deviceset="C-EU" device="C0603K" value="1u/25V-1759039"/>
 <part name="D2" library="diode" deviceset="DIODE" device="-SOD323" value="BAT42WS-1621831"/>
-<part name="Q10" library="transistors" deviceset="N-MOSFET" device="-SOT323-GSD" value="1758094"/>
+<part name="Q10" library="transistors" deviceset="N-MOSFET" device="-SOT323-GSD" value="PMF280UN,115-1758094"/>
 <part name="R1" library="rcl" deviceset="R-EU_" device="R0603" value="330"/>
 <part name="R2" library="rcl" deviceset="R-EU_" device="R0603" value="6k8"/>
 <part name="Q9" library="transistors" deviceset="PNP-BIAS" device="-SOT323-BEC" value="DTA144-1680214"/>
