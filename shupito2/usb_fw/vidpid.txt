@@ -1,3 +1,0 @@
-The VID/PID is randomly generated.
-
-4a61:679a
