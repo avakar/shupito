@@ -1,0 +1,50 @@
+Presto, AVR:
+---------------
+ 1 -- RESET
+ 2 --
+ 3 -- VCC
+ 4 -- GND
+ 5 -- MOSI
+ 6 -- CLOCK
+ 7 -- MISO
+ 8 --
+
+Presto, JTAG:
+---------------
+ 1 --
+ 2 --
+ 3 -- VCC
+ 4 -- GND
+ 5 -- TDI
+ 6 -- TCK
+ 7 -- TDO
+ 8 -- TMS
+
+AVR ICSP pinout
+---------------
+MISO 1 2 VCC
+ SCK 3 4 MOSI
+ RST 5 6 GND
+
+AVR PDI ICSP pinout
+---------------
+DATA 1 2 VCC
+     3 4
+ CLK 5 6 GND
+
+PIC ICSP pinout
+---------------
+1 MCRL
+2 VCC
+3 GND
+4 PGD
+5 PGC
+6 PGM
+
+AVR/Altera JTAG pinout
+---------------
+ TCK 1 2 GND
+ TDO 3 4 VCC
+ TMS 5 6 nSRST
+     7 8 nTRST
+ TDI 9 0 GND

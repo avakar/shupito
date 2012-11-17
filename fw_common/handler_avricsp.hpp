@@ -179,14 +179,21 @@ public:
 							{ 0x58, 0x08, 0x00 },
 							{ 0x50, 0x08, 0x00 },
 						};
-				
+
+						uint8_t addr = cp[1];
+						uint8_t size = cp[5];
+
 						com.write(0x80);
 						com.write(0x44);
-						for (uint8_t i = 0; i < 4; ++i)
+
+						while (size && addr < 4)
 						{
 							for (uint8_t j = 0; j < 3; ++j)
-								spi.send(commands[i][j]);
+								spi.send(commands[addr][j]);
 							com.write(spi.send(0));
+
+							++addr;
+							--size;
 						}
 					}
 					break;

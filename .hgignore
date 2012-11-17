@@ -14,3 +14,6 @@ shupito\fw_main_xmega\default
 shupito\usb_fw\default
 shupito2\fw_main_xmega\default
 shupito2\usb_fw\default
+**.atsuo
+**.orig
+shupito2\fw_main_xmega\desc.h
