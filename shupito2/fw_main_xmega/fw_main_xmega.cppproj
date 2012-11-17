@@ -2,7 +2,7 @@
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectVersion>5.1</ProjectVersion>
+    <ProjectVersion>6.0</ProjectVersion>
     <ToolchainName>com.Atmel.AVRGCC8</ToolchainName>
     <ProjectGuid>{7228019b-5591-4adb-8d0e-ce9df136cdcb}</ProjectGuid>
     <avrdevice>ATxmega32A4</avrdevice>
@@ -17,10 +17,18 @@
     <RootNamespace>fw_main_xmega</RootNamespace>
     <ToolchainFlavour>Native</ToolchainFlavour>
     <AsfVersion>2.11.1</AsfVersion>
+    <KeepTimersRunning>true</KeepTimersRunning>
+    <OverrideVtor>false</OverrideVtor>
+    <OverrideVtorValue />
+    <eraseonlaunchrule>0</eraseonlaunchrule>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <PreBuildEvent>$(MSBuildProjectDirectory)\create_descriptor.py $(MSBuildProjectDirectory)\desc.h</PreBuildEvent>
     <ToolchainSettings>
-      <AvrGccCpp>
+      <AvrGccCpp xmlns="">
+  <avrgcc.common.outputfiles.hex>True</avrgcc.common.outputfiles.hex>
+  <avrgcc.common.outputfiles.lss>True</avrgcc.common.outputfiles.lss>
+  <avrgcc.common.outputfiles.eep>True</avrgcc.common.outputfiles.eep>
   <avrgcc.compiler.general.ChangeDefaultCharTypeUnsigned>True</avrgcc.compiler.general.ChangeDefaultCharTypeUnsigned>
   <avrgcc.compiler.general.ChangeDefaultBitFieldUnsigned>True</avrgcc.compiler.general.ChangeDefaultBitFieldUnsigned>
   <avrgcc.compiler.optimization.level>Optimize for size (-Os)</avrgcc.compiler.optimization.level>
@@ -40,7 +48,6 @@
   </avrgcccpp.linker.libraries.Libraries>
 </AvrGccCpp>
     </ToolchainSettings>
-    <PreBuildEvent>$(MSBuildProjectDirectory)\create_descriptor.py $(MSBuildProjectDirectory)\desc.h</PreBuildEvent>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="main.cpp">
