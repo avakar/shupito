@@ -1,0 +1,17 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# AvrStudio Solution File, Format Version 11.00
+Project("{E66E83B9-2572-4076-B26E-6BE79FF3018A}") = "fw_main_xmega", "fw_main_xmega.cppproj", "{7228019B-5591-4ADB-8D0E-CE9DF136CDCB}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Release|AVR = Release|AVR
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7228019B-5591-4ADB-8D0E-CE9DF136CDCB}.Release|AVR.ActiveCfg = Release|AVR
+		{7228019B-5591-4ADB-8D0E-CE9DF136CDCB}.Release|AVR.Build.0 = Release|AVR
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
