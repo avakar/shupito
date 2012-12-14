@@ -65,6 +65,9 @@ struct ep_descs_t
 // I'm making the variable non-static as it makes the variable aligned (by happenstance).
 ep_descs_t ep_descs __attribute__((aligned(2)));
 
+static char const * usb_sn;
+static uint8_t usb_snlen;
+
 static uint8_t usb_config = 0;
 static bool set_config(uint8_t config)
 {
@@ -90,8 +93,11 @@ static bool set_config(uint8_t config)
 	return true;
 }
 
-void usb_init()
+void usb_init(char const * sn, uint8_t snlen)
 {
+	usb_sn = sn;
+	usb_snlen = snlen;
+
 	ep_descs.ep0_out.DATAPTR = (uint16_t)&ep0_out_buf;
 	ep_descs.ep0_out.AUXDATA = sizeof ep0_out_buf;
 	ep_descs.ep0_in.DATAPTR  = (uint16_t)&ep0_in_buf;
@@ -209,23 +215,44 @@ void usb_poll()
 			break;
 		case usb_get_descriptor:
 			{
-				for (uint8_t i = 0; i < sizeof usb_descriptor_map / sizeof usb_descriptor_map[0]; ++i)
+				if (wValue == 0x302)
 				{
-					usb_descriptor_entry_t const & entry = usb_descriptor_map[i];
-					if (entry.index == wValue)
+					uint8_t snlen = 2 + 2*usb_snlen;
+					if (snlen < wLength)
+						wLength = snlen;
+					ep0_in_buf[0] = snlen;
+					ep0_in_buf[1] = 3;
+					for (uint8_t i = 0; i < usb_snlen; ++i)
 					{
-						if (entry.size < wLength)
-							wLength = entry.size;
-						memcpy_P(ep0_in_buf, usb_descriptors + entry.offset, wLength);
-						ep_descs.ep0_in.CNT = USB_EP_ZLP_bm | wLength;
-						ep_descs.ep0_in.AUXDATA = 0;
-						ep_descs.ep0_in.CTRL = USB_EP_TYPE_CONTROL_gc | USB_EP_MULTIPKT_bm | USB_EP_BUFSIZE_64_gc;
-						ep_descs.ep0_in.STATUS = USB_EP_TOGGLE_bm;
-						ep_descs.ep0_out.STATUS = USB_EP_BUSNACK0_bm;
-						action.in_action = usb_action::ia_reset_control;
-						valid = true;
-						break;
+						ep0_in_buf[2*i+2] = usb_sn[i];
+						ep0_in_buf[2*i+3] = 0;
 					}
+					valid = true;
+				}
+				else
+				{
+					for (uint8_t i = 0; i < sizeof usb_descriptor_map / sizeof usb_descriptor_map[0]; ++i)
+					{
+						usb_descriptor_entry_t const & entry = usb_descriptor_map[i];
+						if (entry.index == wValue)
+						{
+							if (entry.size < wLength)
+								wLength = entry.size;
+							memcpy_P(ep0_in_buf, usb_descriptors + entry.offset, wLength);
+							valid = true;
+							break;
+						}
+					}
+				}
+
+				if (valid)
+				{
+					ep_descs.ep0_in.CNT = USB_EP_ZLP_bm | wLength;
+					ep_descs.ep0_in.AUXDATA = 0;
+					ep_descs.ep0_in.CTRL = USB_EP_TYPE_CONTROL_gc | USB_EP_MULTIPKT_bm | USB_EP_BUFSIZE_64_gc;
+					ep_descs.ep0_in.STATUS = USB_EP_TOGGLE_bm;
+					ep_descs.ep0_out.STATUS = USB_EP_BUSNACK0_bm;
+					action.in_action = usb_action::ia_reset_control;
 				}
 			}
 			break;

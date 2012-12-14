@@ -108,7 +108,37 @@ int main()
 
 	send(com_usb, "Starting...\n");
 
-	usb_init();
+	static uint8_t volatile const * sn_calib_indexes[] = {
+		&PRODSIGNATURES_LOTNUM0,
+		&PRODSIGNATURES_LOTNUM1,
+		&PRODSIGNATURES_LOTNUM2,
+		&PRODSIGNATURES_LOTNUM3,
+		&PRODSIGNATURES_LOTNUM4,
+		&PRODSIGNATURES_LOTNUM5,
+		&PRODSIGNATURES_WAFNUM,
+		&PRODSIGNATURES_COORDX0,
+		&PRODSIGNATURES_COORDX1,
+		&PRODSIGNATURES_COORDY0,
+		&PRODSIGNATURES_COORDY1,
+	};
+
+	static uint8_t const sn_calib_indexes_count = sizeof sn_calib_indexes / sizeof sn_calib_indexes[0];
+
+	char sn[2*sn_calib_indexes_count];
+
+	NVM_CMD = NVM_CMD_READ_CALIB_ROW_gc;
+	for (uint8_t i = 0; i < sn_calib_indexes_count; ++i)
+	{
+		static char const digits[] = "0123456789abcdef";
+		uint8_t val = pgm_read_byte(sn_calib_indexes[i]);
+		sn[2*i] = digits[val >> 4];
+		sn[2*i+1] = digits[val & 0xf];
+	}
+	ADCA.CALL = pgm_read_byte(&PRODSIGNATURES_ADCACAL0);
+	ADCA.CALH = pgm_read_byte(&PRODSIGNATURES_ADCACAL1);
+	NVM_CMD = NVM_CMD_NO_OPERATION_gc;
+
+	usb_init(sn, sizeof sn);
 	for (;;)
 	{
 		if (!com_usb.empty())

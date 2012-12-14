@@ -46,8 +46,7 @@ def descriptors():
             ),
         0x300: LangidsDescriptor([0x409]),
         0x301: StringDescriptor('Shupito'),
-        0x302: StringDescriptor('S/N'),
-        0x303: StringDescriptor('debug'),
+        0x303: StringDescriptor('.debug'),
         }
 
 if __name__ == '__main__':
