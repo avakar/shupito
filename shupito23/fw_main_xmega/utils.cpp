@@ -51,4 +51,5 @@ bool software_reset_occurred()
 void start_flip_bootloader()
 {
 	asm("jmp " STRINGIFY(BOOT_SECTION_START) " + 0x1fc");
+	for (;;) {}
 }
