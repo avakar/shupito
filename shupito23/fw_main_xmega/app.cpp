@@ -5,6 +5,9 @@
 
 app g_app;
 
+com_tunnel_t com_tunnel;
+ISR(USARTC1_RXC_vect) { com_tunnel.intr_rx(); }
+
 process_t g_process;
 process_with_debug_t g_process_with_debug;
 
@@ -131,6 +134,9 @@ void app::init()
 
 	m_handler = 0;
 
+	m_tunnel_open = false;
+	m_tunnel_allowed = true;
+
 	m_in_packet_reported = false;
 }
 
@@ -228,8 +234,11 @@ void app::run()
 	if (m_handler)
 		m_handler->process_selected();
 
-	if (!com_tunnel.empty() && com_tunnel.tx_ready())
-		com_tunnel.write(com_tunnel.read());
+	while (!com_usb_tunnel.empty() && com_tunnel.tx_ready())
+		com_tunnel.write(com_usb_tunnel.read());
+
+	while (!com_tunnel.empty() && com_usb_tunnel.tx_ready())
+		com_usb_tunnel.write(com_tunnel.read());
 }
 
 bool app::send_vccio_state(yb_writer & w)
@@ -411,11 +420,85 @@ void app::process_with_debug()
 	}
 }
 
+#include "baudctrls.h"
+
+void app::open_tunnel(uint32_t baudrate)
+{
+	uint32_t last_val = 0;
+	uint16_t selected_index = usart_baudctrl_count-1;
+	for (uint16_t i = 0; i < sizeof usart_baudctrls; i += 5)
+	{
+		uint32_t val
+			= pgm_read_byte(&usart_baudctrls[i])
+			| ((uint32_t)pgm_read_byte(&usart_baudctrls[i+1]) << 8)
+			| ((uint32_t)(pgm_read_byte(&usart_baudctrls[i+2]) & 0x7f) << 16);
+
+		if (val >= baudrate)
+		{
+			if (i != 0 && baudrate - last_val < val - baudrate)
+				selected_index = i - 5;
+			else
+				selected_index = i;
+			break;
+		}
+
+		last_val = val;
+	}
+
+	m_tunnel_dblspeed = (pgm_read_byte(&usart_baudctrls[selected_index+2]) & 0x7f) != 0;
+
+	uint8_t blo = pgm_read_byte(&usart_baudctrls[selected_index+3]);
+	uint8_t bhi = pgm_read_byte(&usart_baudctrls[selected_index+4]);
+	m_tunnel_baudctrl = blo | (bhi << 8);
+	m_tunnel_open = true;
+
+	if (m_tunnel_allowed)
+	{
+		com_tunnel.usart().close();
+		pin_txd::make_high();
+		com_tunnel.usart().open(m_tunnel_baudctrl, /*rx_interrupt=*/true, /*synchronous=*/false, m_tunnel_dblspeed);
+	}
+}
+
+void app::close_tunnel()
+{
+	if (m_tunnel_open && m_tunnel_allowed)
+	{
+		com_tunnel.usart().close();
+		pin_txd::make_input();
+	}
+
+	m_tunnel_open = false;
+}
+
+void app::allow_tunnel()
+{
+	if (!m_tunnel_allowed && m_tunnel_open)
+	{
+		pin_txd::make_high();
+		com_tunnel.usart().open(m_tunnel_baudctrl, /*rx_interrupt=*/true, /*synchronous=*/false, m_tunnel_dblspeed);
+	}
+
+	m_tunnel_allowed = true;
+}
+
+void app::disallow_tunnel()
+{
+	if (m_tunnel_allowed && m_tunnel_open)
+	{
+		com_tunnel.usart().close();
+		pin_txd::make_input();
+	}
+
+	m_tunnel_allowed = false;
+}
+
 void process_t::operator()() const
 {
 	pdi.process();
 	usb_poll();
 	com_dbg.process_tx();
+	com_tunnel.process_tx();
 }
 
 void process_with_debug_t::operator()() const

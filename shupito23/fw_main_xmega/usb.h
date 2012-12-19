@@ -22,7 +22,7 @@ void usb_yb_confirm_out_packet();
 uint16_t usb_yb_in_packet_ready();
 void usb_yb_send_in_packet(uint16_t size);
 
-typedef avrlib::memory_stream<64, 64> com_tunnel_t;
-extern com_tunnel_t com_tunnel;
+typedef avrlib::memory_stream<64, 64> com_usb_tunnel_t;
+extern com_usb_tunnel_t com_usb_tunnel;
 
 #endif // SHUPITO_USB_H

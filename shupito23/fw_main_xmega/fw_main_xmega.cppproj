@@ -24,7 +24,9 @@
     <avrtool />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-    <PreBuildEvent>$(MSBuildProjectDirectory)\create_descriptor.py $(MSBuildProjectDirectory)\usb_descriptors.h</PreBuildEvent>
+    <PreBuildEvent>$(MSBuildProjectDirectory)\create_descriptor.py $(MSBuildProjectDirectory)\usb_descriptors.h
+$(MSBuildProjectDirectory)\generate_baudctrls.py &gt; $(MSBuildProjectDirectory)\baudctrls.h
+</PreBuildEvent>
     <ToolchainSettings>
       <AvrGccCpp>
   <avrgcc.common.outputfiles.hex>True</avrgcc.common.outputfiles.hex>
@@ -57,6 +59,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="app.cpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="app.hpp">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="clock.cpp">

@@ -7,6 +7,8 @@
 #include "../../fw_common/handler_base.hpp"
 #include "pins.hpp"
 #include "../../fw_common/avrlib/stopwatch.hpp"
+#include "../../fw_common/avrlib/async_usart.hpp"
+#include "../../fw_common/avrlib/usart_xc1.hpp"
 
 #include "../../fw_common/handler_base.hpp"
 #include "../../fw_common/handler_xmega.hpp"
@@ -43,6 +45,9 @@ struct process_with_debug_t
 extern process_t g_process;
 extern process_with_debug_t g_process_with_debug;
 
+typedef avrlib::async_usart<avrlib::usart_xc1, 64, 64> com_tunnel_t;
+extern com_tunnel_t com_tunnel;
+
 class usb_yb_writer
 	: public yb_writer
 {
@@ -72,6 +77,12 @@ public:
 	uint8_t select_handler(handler_base * new_handler);
 	void process_with_debug();
 
+	void open_tunnel(uint32_t baudrate);
+	void close_tunnel();
+
+	void allow_tunnel();
+	void disallow_tunnel();
+
 private:
 	char m_usb_sn[2*sn_calib_indexes_count];
 
@@ -87,7 +98,12 @@ private:
 	handler_avricsp<spi_t, clock_t, pin_rst, process_t> m_handler_avricsp;
 	handler_xmega<my_pdi_t, clock_t, process_t> m_handler_pdi;
 	handler_base * m_handler;
-	
+
+	bool m_tunnel_open;
+	bool m_tunnel_allowed;
+	uint16_t m_tunnel_baudctrl;
+	bool m_tunnel_dblspeed;
+
 	bool m_in_packet_reported;
 };
 

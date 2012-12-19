@@ -116,9 +116,10 @@ usb_desc = {
                 ),
             InterfaceDescriptor(
                 bInterfaceNumber=2,
+                bAlternateSetting=0,
                 bInterfaceClass=0x0A,
                 bInterfaceSubClass=0,
-                bInterfaceProtocol=0,
+                bInterfaceProtocol=0xff,
                 iInterface=4,
                 endpoints=[
                     EndpointDescriptor(
@@ -132,7 +133,7 @@ usb_desc = {
                         wMaxPacketSize=64,
                         bInterval=16)
                     ]
-                )
+                ),
             ]
         ),
     0x300: LangidsDescriptor([0x409]),

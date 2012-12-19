@@ -1,5 +1,6 @@
 #include "spi.hpp"
 #include "pins.hpp"
+#include "app.hpp"
 
 void spi_t::clear()
 {
@@ -8,10 +9,12 @@ void spi_t::clear()
 
 	pin_txd::make_input();
 	pin_xck::make_input();
+	g_app.allow_tunnel();
 }
 
 spi_t::error_t spi_t::start_master(uint16_t bsel, bool sample_on_trailing)
 {
+	g_app.disallow_tunnel();
 	pin_txd::make_low();
 	pin_xck::make_low();
 
