@@ -78,6 +78,7 @@ usb_desc = {
                 bInterfaceClass=0xff,
                 bInterfaceSubClass=0,
                 bInterfaceProtocol=0,
+                iInterface=5,
                 functional=[
                     CustomDescriptor(75, yb_desc)
                     ],
@@ -138,6 +139,7 @@ usb_desc = {
     0x301: StringDescriptor('Shupito'),
     0x303: StringDescriptor('.debug'),
     0x304: StringDescriptor('tunnel'),
+    0x305: StringDescriptor('yb'),
     }
 
 if __name__ == '__main__':

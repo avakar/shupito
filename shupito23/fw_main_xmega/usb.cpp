@@ -95,9 +95,10 @@ static bool set_config(uint8_t config)
 		ep_descs->ep1_in.STATUS = USB_EP_BUSNACK0_bm;
 		ep_descs->ep1_in.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
 		ep_descs->ep2_out.STATUS = 0;
-		ep_descs->ep2_out.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
+		ep_descs->ep2_out.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_MULTIPKT_bm | USB_EP_BUFSIZE_64_gc;
+		ep_descs->ep2_out.AUXDATA = sizeof usb_yb_out_packet;
 		ep_descs->ep2_in.STATUS = USB_EP_BUSNACK0_bm;
-		ep_descs->ep2_in.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
+		ep_descs->ep2_in.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_MULTIPKT_bm | USB_EP_BUFSIZE_64_gc;
 		ep_descs->ep3_out.STATUS = 0;
 		ep_descs->ep3_out.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
 		ep_descs->ep3_in.STATUS = USB_EP_BUSNACK0_bm;
@@ -327,6 +328,7 @@ uint16_t usb_yb_has_out_packet()
 
 void usb_yb_confirm_out_packet()
 {
+	ep_descs->ep2_out.CNT = 0;
 	ep_descs->ep2_out.STATUS &= ~USB_EP_BUSNACK0_bm;
 }
 
@@ -339,6 +341,7 @@ uint16_t usb_yb_in_packet_ready()
 
 void usb_yb_send_in_packet(uint16_t size)
 {
-	ep_descs->ep2_in.CNT = 0x8000 | size;
+	ep_descs->ep2_in.AUXDATA = 0;
+	ep_descs->ep2_in.CNT = (size == sizeof usb_yb_out_packet)? size: (0x8000 | size);
 	ep_descs->ep2_in.STATUS &= ~USB_EP_BUSNACK0_bm;
 }

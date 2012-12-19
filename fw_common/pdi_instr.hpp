@@ -78,6 +78,18 @@ void pdi_ld(Pdi & pdi)
 	pdi.write(0x24, 1);
 }
 
+template <typename Pdi>
+void pdi_rep_ld(Pdi & pdi, uint8_t count)
+{
+	if (count)
+	{
+		// REPEAT count-1; LD byte, *ptr++
+		pdi.write(0xa0);
+		pdi.write(count-1);
+		pdi.write(0x24, count);
+	}
+}
+
 template <typename Pdi, typename T>
 void pdi_st(Pdi & pdi, T t)
 {
@@ -156,8 +168,8 @@ uint8_t pdi_wait_nvm_busy(Pdi & pdi, Clock & clock, typename Clock::time_type ti
 }
 
 
-template <typename Pdi, typename Com, typename Clock, typename Process>
-uint8_t pdi_ptrcopy(Pdi & pdi, Com & com, uint32_t addr, uint8_t len, Clock & clock, Process const & process)
+template <typename Pdi, typename Clock, typename Process>
+uint8_t pdi_ptrcopy(Pdi & pdi, uint8_t * wbuf, uint32_t addr, uint8_t len, Clock & clock, Process const & process)
 {
 	uint8_t error = 0;
 	while (len > 0)
@@ -176,7 +188,7 @@ uint8_t pdi_ptrcopy(Pdi & pdi, Com & com, uint32_t addr, uint8_t len, Clock & cl
 			uint8_t v = 0;
 			if (!error)
 				error = pdi_read(pdi, v, clock, process);
-			com.write(v);
+			*wbuf++ = v;
 		}
 
 		addr += chunk;

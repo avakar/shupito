@@ -23,9 +23,9 @@ public:
 		pdi.clear();
 	}
 
-	bool handle_command(avrlib::command_parser & cp, com_t & com)
+	bool handle_command(uint8_t cmd, uint8_t const * cp, uint8_t size, com_t & w)
 	{
-		switch (cp.command())
+		switch (cmd)
 		{
 		case 1: // PROGEN 2'bsel
 			{
@@ -62,9 +62,7 @@ public:
 				if (error != 0)
 					pdi.clear();
 
-				com.write(0x80);
-				com.write(0x11);
-				com.write(error);
+				w.send_sync(1, &error, 1);
 			}
 			break;
 		case 2: // Leave programming mode
@@ -76,9 +74,10 @@ public:
 				pdi.clear();
 			}
 
-			com.write(0x80);
-			com.write(0x21);
-			com.write(0);
+			{
+				uint8_t error = 0;
+				w.send_sync(2, &error, 1);
+			}
 			break;
 		case 3:
 			{
@@ -86,26 +85,25 @@ public:
 				pdi_sts(pdi, (uint8_t)0x010001CA, (uint8_t)0x43);
 				pdi_lds(pdi, (uint32_t)0x01000090, 4);
 
-				com.write(0x80);
-				com.write(0x35);
-
+				uint8_t buf[5];
 				uint8_t error = 0;
-				
+
 				for (uint8_t i = 0; i != 4; ++i)
 				{
 					uint8_t v = 0;
 					if (!error)
 						error = pdi_read(pdi, v, clock, process);
-					com.write(v);
+					buf[i] = v;
 				}
 
 				if (error)
 					pdi.clear();
-				com.write(error);
+				buf[4] = error;
+				w.send_sync(3, buf, sizeof buf);
 			}
 			break;
 		case 4: // READ 1'memid 4'addr 2'size
-			if (cp.size() == 7)
+			if (size == 7)
 			{
 				uint8_t error = 0;
 
@@ -123,24 +121,25 @@ public:
 
 					while (error == 0)
 					{
-						uint8_t chunk = len > 15? 15: (uint8_t)len;
+						uint8_t max_packet_size = w.max_packet_size();
+						uint8_t chunk = len > max_packet_size? max_packet_size: (uint8_t)len;
 						if (error != 0)
 							chunk = 0;
 
-						com.write(0x80);
-						com.write(0x40 | chunk);
+						uint8_t * wbuf = w.alloc_sync(4, chunk);
+						pdi_rep_ld(pdi, chunk);
 						for (uint8_t i = chunk; i != 0; --i, ++addr)
 						{
-							pdi_ld(pdi);
 							uint8_t v = 0;
 							if (error == 0)
 								error = pdi_read(pdi, v, clock, process);
-							com.write(v);
+							*wbuf++ = v;
 							process();
 						}
+						w.commit();
 
 						len -= chunk;
-						if (chunk < 15)
+						if (chunk < max_packet_size)
 							break;
 					}
 				}
@@ -152,9 +151,9 @@ public:
 
 					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x07/*read fuse*/);
 
-					com.write(0x80);
-					com.write(0x40 | len);
-					error = pdi_ptrcopy(pdi, com, 0x008F0020 | (cp[1] & 0x07), len, clock, process);
+					uint8_t * wbuf = w.alloc_sync(4, len);
+					error = pdi_ptrcopy(pdi, wbuf, 0x008F0020 | (cp[1] & 0x07), len, clock, process);
+					w.commit();
 				}
 				else
 				{
@@ -164,9 +163,7 @@ public:
 				if (error)
 				{
 					pdi.clear();
-					com.write(0x80);
-					com.write(0x21);
-					com.write(error);
+					w.send_sync(2, &error, 1);
 				}
 			}
 			break;
@@ -174,7 +171,7 @@ public:
 			// ERASE 1'memid
 			{
 				uint8_t error = 0;
-				if (cp.size() == 0)
+				if (size == 0)
 				{
 					// CMD = Chip erase
 					pdi_sts(pdi, (uint32_t)0x010001CA, (uint8_t)0x40);
@@ -184,15 +181,13 @@ public:
 					if (error)
 						pdi.clear();
 				}
-				com.write(0x80);
-				com.write(0x51);
-				com.write(error);
+				w.send_sync(5, &error, 1);
 			}
 			break;
 		case 6:
 			// Prepare memory page for a load and write.
 			// WPREP 1'memid 4'addr
-			if (cp.size() >= 5)
+			if (size >= 5)
 			{
 				uint8_t memid = cp[0];
 
@@ -228,22 +223,20 @@ public:
 					error = 1;
 				}
 
-				com.write(0x80);
-				com.write(0x61);
-				com.write(error);
+				w.send_sync(6, &error, 1);
 			}
 			break;
 		case 7:
 			// Prepare memory page for a load and write.
 			// WFILL 1'memid (1'data)*
-			if (cp.size() >= 1)
+			if (size >= 1)
 			{
 				uint8_t error = 0;
 
 				uint8_t memid = cp[0];
 				if (memid == 1 || memid == 2)
 				{
-					for (uint8_t i = 1; i < cp.size(); ++i)
+					for (uint8_t i = 1; i < size; ++i)
 					{
 						while (!pdi.tx_empty())
 							process();
@@ -252,7 +245,7 @@ public:
 				}
 				else if (memid == 3)
 				{
-					for (uint8_t i = 1; !error && i < cp.size(); ++i)
+					for (uint8_t i = 1; !error && i < size; ++i)
 					{
 						while (!pdi.tx_empty())
 							process();
@@ -264,14 +257,12 @@ public:
 					}
 				}
 
-				com.write(0x80);
-				com.write(0x71);
-				com.write(error);
+				w.send_sync(7, &error, 1);
 			}
 			break;
 		case 8:
 			// WRITE 1'memid 4'addr
-			if (cp.size() == 5)
+			if (size == 5)
 			{
 				uint8_t error = 0;
 
@@ -300,9 +291,7 @@ public:
 					error = 1;
 				}
 
-				com.write(0x80);
-				com.write(0x81);
-				com.write(error);
+				w.send_sync(8, &error, 1);
 			}
 			break;
 
