@@ -56,16 +56,40 @@
     </ToolchainSettings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="app.cpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="clock.cpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="clock.hpp">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="dbg.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="main.cpp">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="pins.hpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="spi.cpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="spi.hpp">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="usb.cpp">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="usb.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="utils.cpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="utils.hpp">
       <SubType>compile</SubType>
     </Compile>
   </ItemGroup>

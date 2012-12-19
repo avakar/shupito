@@ -1,0 +1,425 @@
+#include "app.hpp"
+#include "usb.h"
+#include "dbg.h"
+#include "utils.hpp"
+
+app g_app;
+
+process_t g_process;
+process_with_debug_t g_process_with_debug;
+
+static my_pdi_t pdi(clock);
+
+ISR(USARTC0_DRE_vect) { pdi.intr_udre(); }
+ISR(USARTC0_TXC_vect) { pdi.intr_txc(); }
+ISR(USARTC0_RXC_vect) { pdi.intr_rxc(); }
+
+static spi_t spi;
+
+com_dbg_t com_dbg;
+ISR(USARTE0_RXC_vect) { com_dbg.intr_rx(); }
+
+usb_yb_writer::usb_yb_writer()
+{
+	m_max_packet_size = 255;
+}
+
+uint8_t * usb_yb_writer::alloc(uint8_t cmd, uint8_t size)
+{
+	if (!usb_yb_in_packet_ready())
+		return 0;
+	usb_yb_in_packet[0] = cmd;
+	m_size = size;
+	return usb_yb_in_packet + 1;
+}
+
+uint8_t * usb_yb_writer::alloc_sync(uint8_t cmd, uint8_t size)
+{
+	while (!usb_yb_in_packet_ready())
+		g_process();
+	usb_yb_in_packet[0] = cmd;
+	m_size = size;
+	return usb_yb_in_packet + 1;
+}
+
+void usb_yb_writer::commit()
+{
+	usb_yb_send_in_packet(m_size + 1);
+}
+
+bool usb_yb_writer::send(uint8_t cmd, uint8_t const * data, uint8_t size)
+{
+	if (!usb_yb_in_packet_ready())
+		return false;
+	usb_yb_in_packet[0] = cmd;
+	for (uint8_t i = 0; i != size; ++i)
+		usb_yb_in_packet[i+1] = data[i];
+	usb_yb_send_in_packet(size + 1);
+	return true;
+}
+
+void usb_yb_writer::send_sync(uint8_t cmd, uint8_t const * data, uint8_t size)
+{
+	while (!usb_yb_in_packet_ready())
+		g_process();
+	usb_yb_in_packet[0] = cmd;
+	for (uint8_t i = 0; i != size; ++i)
+		usb_yb_in_packet[i+1] = data[i];
+	usb_yb_send_in_packet(size + 1);
+}
+
+app::app()
+	: m_handler_avricsp(spi, clock, g_process), m_handler_pdi(pdi, clock, g_process)
+{
+}
+
+void app::init()
+{
+	pin_led::make_low();
+	pin_sup_3v3::make_low();
+	pin_sup_5v0::make_low();
+
+	pin_hiv_lo::make_low();
+	pin_hiv_vccio::make_low();
+	pin_hiv_hi::make_low();
+	pin_hiv_pwm::make_low();
+
+	pin_txd::init();
+	pin_aux_rst::init();
+	pin_pdi::init();
+
+	timer_xd0::init();
+
+	// Setup com_dbg
+	pin_dbg_rx::pullup();
+	pin_dbg_tx::make_high();
+	com_dbg.usart().open((-1 << 12)|102 /*38400*/, true);
+
+	send(com_usb, "Starting...\n");
+
+	NVM_CMD = NVM_CMD_READ_CALIB_ROW_gc;
+	for (uint8_t i = 0; i < sn_calib_indexes_count; ++i)
+	{
+		static char const digits[] = "0123456789abcdef";
+		uint8_t val = pgm_read_byte(sn_calib_indexes[i]);
+		m_usb_sn[2*i] = digits[val >> 4];
+		m_usb_sn[2*i+1] = digits[val & 0xf];
+	}
+	ADCA.CALL = pgm_read_byte(&PRODSIGNATURES_ADCACAL0);
+	ADCA.CALH = pgm_read_byte(&PRODSIGNATURES_ADCACAL1);
+	NVM_CMD = NVM_CMD_NO_OPERATION_gc;
+
+	// Prepare the ADC
+	ADCA.CH0.CTRL = ADC_CH_INPUTMODE_SINGLEENDED_gc;
+	ADCA.CH0.MUXCTRL = ADC_CH_MUXPOS_PIN7_gc;
+	ADCA.PRESCALER = ADC_PRESCALER_DIV64_gc;
+	ADCA.REFCTRL = ADC_REFSEL_INT1V_gc;
+	ADCA.CTRLB = ADC_CONMODE_bm | ADC_RESOLUTION_12BIT_gc;
+	ADCA.CTRLA = ADC_ENABLE_bm;
+
+	// Start the conversion immediately
+	ADCA.CH0.CTRL |= ADC_CH_START_bm;
+
+	usb_init(m_usb_sn, sizeof m_usb_sn);
+
+	m_vccio_timeout.init(clock, clock_t::us<100000>::value);
+	m_vccio_voltage = 0;
+	m_send_vcc_driver_list_scheduled = false;
+	m_send_vccio_state_scheduled = false;
+	m_vccio_drive_state = vccio_disabled;
+	m_vccio_drive_check_timeout.init_stopped(clock, clock_t::us<200000>::value);
+
+	m_handler = 0;
+
+	m_in_packet_reported = false;
+}
+
+void app::run()
+{
+	if (uint16_t size = usb_yb_has_out_packet())
+	{
+		if (!m_in_packet_reported)
+		{
+			for (uint8_t i = 0; i != size; ++i)
+			{
+				if (i != 0)
+					com_usb.write(':');
+				send_hex(com_usb, usb_yb_out_packet[i], 2);
+			}
+			com_usb.write('\n');
+			m_in_packet_reported = true;
+		}
+
+		if (this->handle_packet(usb_yb_out_packet[0], usb_yb_out_packet + 1, size - 1, m_usb_writer))
+		{
+			usb_yb_confirm_out_packet();
+			m_in_packet_reported = false;
+		}
+	}
+
+	if (m_vccio_timeout)
+	{
+		if (usb_yb_in_packet_ready())
+		{
+			m_vccio_timeout.restart();
+			usb_yb_in_packet[0] = 0xa;
+			usb_yb_in_packet[1] = 1;
+			usb_yb_in_packet[2] = 3;
+			usb_yb_in_packet[3] = m_vccio_voltage;
+			usb_yb_in_packet[4] = m_vccio_voltage >> 8;
+			usb_yb_send_in_packet(5);
+		}
+		else
+		{
+			m_vccio_timeout.force();
+		}
+	}
+
+	if (ADCA.CH0.INTFLAGS & ADC_CH_CHIF_bm)
+	{
+		ADCA.CH0.INTFLAGS = ADC_CH_CHIF_bm;
+		m_vccio_voltage = ADCA.CH0RESL;
+		m_vccio_voltage |= (ADCA.CH0RESH << 8);
+		ADCA.CH0.CTRL |= ADC_CH_START_bm;
+	}
+
+	if (m_send_vcc_driver_list_scheduled)
+	{
+		if (this->send_vccio_drive_list(m_usb_writer))
+			m_send_vcc_driver_list_scheduled = false;
+	}
+
+	if (m_send_vccio_state_scheduled)
+	{
+		if (this->send_vccio_state(m_usb_writer))
+			m_send_vccio_state_scheduled = false;
+	}
+
+	if (m_vccio_drive_state == vccio_disabled && m_vccio_voltage < 111) // 300mV
+	{
+		m_vccio_drive_state = vccio_enabled;
+		m_send_vcc_driver_list_scheduled = true;
+	}
+
+	if ((m_vccio_drive_state == vccio_enabled && m_vccio_voltage > 185)) // 500mV
+	{
+		pin_sup_5v0::set_low();
+		pin_sup_3v3::set_low();
+		m_vccio_drive_state = vccio_disabled;
+		m_send_vcc_driver_list_scheduled = true;
+	}
+
+	if (m_vccio_drive_state == vccio_active && m_vccio_drive_check_timeout)
+	{
+		m_vccio_drive_check_timeout.force();
+		if (pin_sup_5v0::get_value() && m_vccio_voltage < 1630) // 4400mV
+		{
+			this->set_vccio_drive(0);
+		}
+		else if (pin_sup_3v3::get_value()
+			&& (m_vccio_voltage < 1110 || m_vccio_voltage > 1332)) // 3000mV and 3600mV
+		{
+			this->set_vccio_drive(0);
+		}
+	}
+
+	g_process_with_debug();
+
+	if (m_handler)
+		m_handler->process_selected();
+
+	if (!com_tunnel.empty() && com_tunnel.tx_ready())
+		com_tunnel.write(com_tunnel.read());
+}
+
+bool app::send_vccio_state(yb_writer & w)
+{
+	if (uint8_t * buf = w.alloc(0xa, 3))
+	{
+		*buf++ = 0x01;  // VCCIO
+		*buf++ = 0x01;  // get_drive
+		*buf++ = pin_sup_3v3::get_value()? 0x01: pin_sup_5v0::get_value()? 0x02: 0x00;
+		w.commit();
+		return true;
+	}
+
+	return false;
+}
+
+bool app::send_vccio_drive_list(yb_writer & w)
+{
+	if (uint8_t * buf = w.alloc(0xa, m_vccio_drive_state != vccio_disabled? 0xe: 0x6))
+	{
+		*buf++ = 0x00;
+		*buf++ = 0x01;  // VCCIO
+
+		*buf++ = 0x00;  // <hiz>
+		*buf++ = 0x00;
+		*buf++ = 0x00;
+		*buf++ = 0x00;
+
+		if (m_vccio_drive_state != vccio_disabled)
+		{
+			*buf++ = 0xe4;  // 3.3V, 50mA
+			*buf++ = 0x0c;
+			*buf++ = 0x32;
+			*buf++ = 0x00;
+			*buf++ = 0x88;  // 5V, 100mA
+			*buf++ = 0x13;
+			*buf++ = 0x64;
+			*buf++ = 0x00;
+		}
+
+		w.commit();
+		return true;
+	}
+
+	return false;
+}
+
+void app::set_vccio_drive(uint8_t value)
+{
+	pin_sup_3v3::set_value(false);
+	pin_sup_5v0::set_value(false);
+
+	if (((value == 1) || (value == 2)) && m_vccio_drive_state != vccio_disabled)
+	{
+		m_vccio_drive_check_timeout.restart();
+		m_vccio_drive_state = vccio_active;
+
+		if (value == 1)
+			pin_sup_3v3::set_value(true);
+		else if (value == 2)
+			pin_sup_5v0::set_value(true);
+	}
+	else
+	{
+		m_vccio_drive_check_timeout.cancel();
+		m_vccio_drive_state = vccio_enabled;
+	}
+
+	m_send_vccio_state_scheduled = true;
+}
+
+bool app::handle_packet(uint8_t cmd, uint8_t const * cp, uint8_t size, yb_writer & w)
+{
+	switch (cmd)
+	{
+	case 0x0:
+		if (size && cp[0] == 1)
+		{
+			uint8_t * wbuf = w.alloc(0, 1);
+			if (!wbuf)
+				return false;
+
+			uint8_t err = 1;
+			if (size == 3 && cp[1] == 0)
+			{
+				switch (cp[2])
+				{
+				case 0:
+					err = this->select_handler(&m_handler_avricsp);
+					break;
+				case 1:
+					err = this->select_handler(&m_handler_pdi);
+					break;
+				}
+			}
+
+			*wbuf = err;
+			w.commit();
+		}
+		else if (size && cp[0] == 2)
+		{
+			uint8_t * wbuf = w.alloc(0, 1);
+			if (!wbuf)
+				return false;
+
+			if (size == 3 && cp[1] == 0)
+				this->select_handler(0);
+
+			*wbuf++ = 0;
+			w.commit();
+		}
+
+		break;
+	case 0xa:
+		if (size == 2 && cp[0] == 0 && cp[1] == 0)
+		{
+			static uint8_t const vccio_list[] = {
+				0, 0,
+				0, // flags
+				5, 'V', 'C', 'C', 'I', 'O'
+			};
+
+			if (!w.send(0xa, vccio_list, sizeof vccio_list))
+				return false;
+
+			m_send_vcc_driver_list_scheduled = true;
+			m_send_vccio_state_scheduled = true;
+		}
+		else if (size == 3 && cp[0] == 1 && cp[1] == 2)
+		{
+			this->set_vccio_drive(cp[2]);
+		}
+
+		break;
+
+	default:
+		if (m_handler)
+			return m_handler->handle_command(cmd, cp, size, w);
+	}
+
+	return true;
+}
+
+uint8_t app::select_handler(handler_base * new_handler)
+{
+	uint8_t err = 0;
+
+	if (new_handler != m_handler)
+	{
+		if (m_handler)
+			m_handler->unselect();
+		if (new_handler)
+			err = new_handler->select();
+		m_handler = (err == 0? new_handler: 0);
+	}
+
+	return err;
+}
+	
+void app::process_with_debug()
+{
+	if (!com_usb.empty())
+	{
+		switch (com_usb.read())
+		{
+		case '?':
+			send(com_usb, "Shupito 2.3\n");
+			break;
+		case 'A':
+			AVRLIB_ASSERT(!"test assert");
+			break;
+		case 'B':
+			initiate_software_reset();
+			break;
+		default:
+			send(com_usb, "?AB\n");
+			break;
+		}
+	}
+}
+
+void process_t::operator()() const
+{
+	pdi.process();
+	usb_poll();
+	com_dbg.process_tx();
+}
+
+void process_with_debug_t::operator()() const
+{
+	g_process();
+	g_app.process_with_debug();
+}

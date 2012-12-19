@@ -1,6 +1,8 @@
 #ifndef SHUPITO_FW_COMMON_PDI_HPP
 #define SHUPITO_FW_COMMON_PDI_HPP
 
+#include "avrlib/buffer.hpp"
+
 template <typename Clock, typename PdiClk, typename PdiData, typename PinLed>
 class pdi_t
 {
