@@ -4,14 +4,13 @@
 #include "handler_base.hpp"
 #include "pdi_instr.hpp"
 
-template <typename Pdi, typename Com, typename Clock, typename Process>
+template <typename Pdi, typename Clock, typename Process>
 class handler_xmega
-	: public handler_base<Com>
+	: public handler_base
 {
 public:
 	typedef Pdi pdi_t;
 	typedef Clock clock_t;
-	typedef Com com_t;
 
 	handler_xmega(pdi_t & pdi, clock_t & clock, Process process = Process())
 		: pdi(pdi), clock(clock), m_fuse_address(0), process(process)

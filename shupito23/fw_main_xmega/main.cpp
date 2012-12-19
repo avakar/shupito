@@ -13,6 +13,7 @@
 
 #include "../../fw_common/handler_base.hpp"
 #include "../../fw_common/handler_xmega.hpp"
+#include "../../fw_common/handler_avricsp.hpp"
 
 #include "../../fw_common/pdi.hpp"
 
@@ -39,12 +40,14 @@ AVRLIB_DEFINE_XMEGA_PIN(pin_aux_rstd, PORTD, 0);
 AVRLIB_DEFINE_XMEGA_PIN(pin_aux_rstv, PORTC, 1);
 AVRLIB_DEFINE_XMEGA_PIN(pin_pdid,     PORTD, 1);
 AVRLIB_DEFINE_XMEGA_PIN(pin_pdiv,     PORTC, 3);
+AVRLIB_DEFINE_XMEGA_PIN(pin_xckv,     PORTC, 5);
 AVRLIB_DEFINE_XMEGA_PIN(pin_rxd,      PORTC, 6);
 AVRLIB_DEFINE_XMEGA_PIN(pin_txdv,     PORTC, 7);
 AVRLIB_DEFINE_XMEGA_PIN(pin_txdd,     PORTD, 2);
 
 typedef pin_buffer_with_oe<pin_aux_rstv, pin_aux_rstd> pin_aux_rst;
 typedef pin_buffer_with_oe<pin_pdiv, pin_pdid> pin_pdi;
+typedef pin_buffer_with_oe<pin_xckv, pin_pdid> pin_xck;
 typedef pin_buffer_with_oe<pin_txdv, pin_txdd> pin_txd;
 
 struct timer_xd0
@@ -71,6 +74,9 @@ static my_pdi_t pdi(clock);
 ISR(USARTC0_DRE_vect) { pdi.intr_udre(); }
 ISR(USARTC0_TXC_vect) { pdi.intr_txc(); }
 ISR(USARTC0_RXC_vect) { pdi.intr_rxc(); }
+
+#include "spi.hpp"
+static spi_t spi;
 
 /**
  * \brief Jumps to the FLIP bootloader.
@@ -144,22 +150,6 @@ static void setup_clocks()
 	OSC_CTRL = OSC_PLLEN_bm | OSC_RC32MEN_bm | OSC_RC2MEN_bm | OSC_RC32KEN_bm;
 	wait_until(OSC_STATUS & OSC_PLLRDY_bm);
 }
-
-struct yb_writer
-{
-	virtual uint8_t * alloc(uint8_t cmd, uint8_t size) { return 0; }
-	virtual uint8_t * alloc_sync(uint8_t cmd, uint8_t size) { return 0; }
-	virtual void commit() {}
-	virtual bool send(uint8_t cmd, uint8_t const * data, uint8_t size) { return false; }
-	virtual void send_sync(uint8_t cmd, uint8_t const * data, uint8_t size) {}
-
-	uint8_t max_packet_size() const
-	{
-		return m_max_packet_size;
-	}
-
-	uint8_t m_max_packet_size;
-};
 
 struct process_t
 {
@@ -250,7 +240,7 @@ class app
 {
 public:
 	app()
-		: handler_pdi(pdi, clock, g_process)
+		: m_handler_avricsp(spi, clock, g_process), m_handler_pdi(pdi, clock, g_process)
 	{
 	}
 
@@ -498,8 +488,11 @@ public:
 				{
 					switch (cp[2])
 					{
+					case 0:
+						err = this->select_handler(&m_handler_avricsp);
+						break;
 					case 1:
-						err = this->select_handler(&handler_pdi);
+						err = this->select_handler(&m_handler_pdi);
 						break;
 					}
 				}
@@ -551,7 +544,7 @@ public:
 		return true;
 	}
 
-	uint8_t select_handler(handler_base<yb_writer> * new_handler)
+	uint8_t select_handler(handler_base * new_handler)
 	{
 		uint8_t err = 0;
 
@@ -599,8 +592,9 @@ private:
 	enum { vccio_disabled, vccio_enabled, vccio_active } m_vccio_drive_state;
 	avrlib::timeout<clock_t> m_vccio_drive_check_timeout;
 
-	handler_xmega<my_pdi_t, yb_writer, clock_t, process_t> handler_pdi;
-	handler_base<yb_writer> * m_handler;
+	handler_avricsp<spi_t, clock_t, pin_rst, process_t> m_handler_avricsp;
+	handler_xmega<my_pdi_t, clock_t, process_t> m_handler_pdi;
+	handler_base * m_handler;
 	
 	bool m_in_packet_reported;
 };

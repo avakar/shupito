@@ -5,13 +5,12 @@
 #include "avrlib/stopwatch.hpp"
 #include <avr/io.h>
 
-template <typename Spi, typename Com, typename Clock, typename ResetPin, typename Process>
+template <typename Spi, typename Clock, typename ResetPin, typename Process>
 class handler_avricsp
-	: public handler_base<Com>
+	: public handler_base
 {
 public:
 	typedef Spi spi_t;
-	typedef Com com_t;
 	typedef Clock clock_t;
 
 	handler_avricsp(spi_t & spi, clock_t & clock, Process process = Process())
@@ -24,9 +23,9 @@ public:
 		spi.clear();
 	}
 
-	bool handle_command(avrlib::command_parser & cp, com_t & com)
+	bool handle_command(uint8_t cmd, uint8_t const * cp, uint8_t size, com_t & w)
 	{
-		switch (cp.command())
+		switch (cmd)
 		{
 		case 1: // PROGEN 2'bsel
 			m_programming_enabled = false;
@@ -35,9 +34,7 @@ public:
 				typename spi_t::error_t err = spi.start_master(cp[0] | (cp[1] << 8), false);
 				if (err)
 				{
-					com.write(0x80);
-					com.write(0x11);
-					com.write(err);
+					w.send_sync(1, &err, 1);
 					break;
 				}
 			}
@@ -70,20 +67,26 @@ public:
 			}
 
 			if (!m_programming_enabled)
+			{
 				spi.clear();
+				ResetPin::make_input();
+			}
 
-			com.write(0x80);
-			com.write(0x11);
-			com.write(!m_programming_enabled);
+			{
+				uint8_t err = !m_programming_enabled;
+				w.send_sync(1, &err, 1);
+			}
 			break;
 		case 2:
 			// Release the reset line
 			spi.clear();
 			ResetPin::make_input();
 			m_programming_enabled = false;
-			com.write(0x80);
-			com.write(0x21);
-			com.write(0);
+
+			{
+				uint8_t err = 0;
+				w.send_sync(2, &err, 1);
+			}
 			break;
 		case 3:
 			// Read signature
@@ -100,16 +103,20 @@ public:
 					{ 0x38, 0x00, 0x00 },*/
 				};
 				static uint8_t const command_count = sizeof commands / sizeof commands[0];
-				
-				com.write(0x80);
-				com.write(0x30 | (command_count + 1));
+
+				uint8_t * wbuf = w.alloc(3, command_count + 1);
+				if (!wbuf)
+					return false;
+
 				for (uint8_t i = 0; i < command_count; ++i)
 				{
 					for (uint8_t j = 0; j < 3; ++j)
 						spi.send(commands[i][j]);
-					com.write(spi.send(0));
+					*wbuf++ = spi.send(0);
 				}
-				com.write(0); // no error
+
+				*wbuf++ = 0;
+				w.commit();
 			}
 			break;
 		case 4: // READ 1'memid 4'addr 2'size
@@ -124,10 +131,9 @@ public:
 
 						for (;;)
 						{
-							uint8_t chunk = size > 15? 15: size;
+							uint8_t chunk = size > w.max_packet_size()? w.max_packet_size(): size;
 
-							com.write(0x80);
-							com.write(0x40 | chunk);
+							uint8_t * wbuf = w.alloc_sync(4, chunk);
 							for (uint8_t i = chunk; i != 0; --i, ++addr)
 							{
 								// program memory words are sent in the little endian order
@@ -135,12 +141,13 @@ public:
 								spi.send(addr >> 9);
 								m_process();
 								spi.send(addr >> 1);
-								com.write(spi.send(0));
+								*wbuf++ = spi.send(0);
 								m_process();
 							}
+							w.commit();
 
 							size -= chunk;
-							if (chunk < 15)
+							if (chunk < w.max_packet_size())
 								break;
 						}
 					}
@@ -151,21 +158,21 @@ public:
 						uint16_t size = cp[5] | (cp[6] << 8);
 						for (;;)
 						{
-							uint8_t chunk = size > 15? 15: size;
+							uint8_t chunk = size > w.max_packet_size()? w.max_packet_size(): size;
 
-							com.write(0x80);
-							com.write(0x40 | chunk);
+							uint8_t * wbuf = w.alloc_sync(4, chunk);
 							for (uint8_t i = chunk; i != 0; --i, ++addr)
 							{
 								spi.send(0xa0);
 								spi.send(addr >> 8);
 								spi.send(addr);
-								com.write(spi.send(0));
+								*wbuf++ = spi.send(0);
 								m_process();
 							}
+							w.commit();
 
 							size -= chunk;
-							if (chunk < 15)
+							if (chunk < w.max_packet_size())
 								break;
 						}
 					}
@@ -183,25 +190,25 @@ public:
 						uint8_t addr = cp[1];
 						uint8_t size = cp[5];
 
-						com.write(0x80);
-						com.write(0x44);
-
+						uint8_t * wbuf = w.alloc_sync(4, 4);
 						while (size && addr < 4)
 						{
 							for (uint8_t j = 0; j < 3; ++j)
 								spi.send(commands[addr][j]);
-							com.write(spi.send(0));
+							*wbuf++ = spi.send(0);
 
 							++addr;
 							--size;
 						}
+						
+						w.commit();
 					}
 					break;
 				}
 			}
 			break;
 		case 5: // ERASE [1'memid]
-			if (cp.size() == 0 || (cp.size() == 1 && cp[0] == 1))
+			if (size == 0 || (size == 1 && cp[0] == 1))
 			{
 				spi.send(0xAC);
 				spi.send(0x80);
@@ -211,13 +218,14 @@ public:
 				avrlib::wait(clock, Clock::template us<100000>::value);
 			}
 
-			com.write(0x80);
-			com.write(0x51);
-			com.write(0x00);
+			{
+				uint8_t err = 0;
+				w.send_sync(5, &err, 1);
+			}
 			break;
 		case 6:
 			// WPREP 1'memid 4'addr
-			if (cp.size() >= 5)
+			if (size >= 5)
 			{
 				uint8_t memid = cp[0];
 
@@ -236,21 +244,22 @@ public:
 					success = false;
 				}
 
-				com.write(0x80);
-				com.write(0x61);
-				com.write(!success);
+				{
+					uint8_t err = !success;
+					w.send_sync(6, &err, 1);
+				}
 			}
 			break;
 		case 7:
 			// WFILL 1'memid (1'data)*
-			if (cp.size() >= 1)
+			if (size >= 1)
 			{
 				bool success = true;
 
 				uint8_t memid = cp[0];
 				if (memid == 1)
 				{
-					for (uint8_t i = 1; i < cp.size(); ++i)
+					for (uint8_t i = 1; i < size; ++i)
 					{
 						spi.send(m_mempage_ptr & 1? 0x48: 0x40);
 						spi.send(0x00);
@@ -261,7 +270,7 @@ public:
 				}
 				else if (memid == 2) // eeprom
 				{
-					for (uint8_t i = 1; i < cp.size(); ++i)
+					for (uint8_t i = 1; i < size; ++i)
 					{
 						spi.send(0xc0);
 						spi.send(m_mempage_ptr >> 8);
@@ -275,7 +284,7 @@ public:
 				{
 					static uint8_t cmds[4] = { 0xE0, 0xA0, 0xA8, 0xA4 };
 
-					for (uint8_t i = 1; i < cp.size(); ++i)
+					for (uint8_t i = 1; i < size; ++i)
 					{
 						spi.send(0xAC);
 						spi.send(cmds[m_mempage_ptr++ & 0x3]);
@@ -289,14 +298,15 @@ public:
 					success = false;
 				}
 
-				com.write(0x80);
-				com.write(0x71);
-				com.write(!success);
+				{
+					uint8_t err = !success;
+					w.send_sync(7, &err, 1);
+				}
 			}
 			break;
 		case 8:
 			// WRITE 1'memid 4'addr
-			if (cp.size() == 5)
+			if (size == 5)
 			{
 				bool success = true;
 
@@ -320,9 +330,10 @@ public:
 					success = false;
 				}
 
-				com.write(0x80);
-				com.write(0x81);
-				com.write(!success);
+				{
+					uint8_t err = !success;
+					w.send_sync(8, &err, 1);
+				}
 			}
 			break;
 		default:
