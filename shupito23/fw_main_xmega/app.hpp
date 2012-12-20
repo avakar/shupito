@@ -3,6 +3,7 @@
 
 #include "clock.hpp"
 #include "spi.hpp"
+#include "hiv.hpp"
 #include "../../fw_common/pdi.hpp"
 #include "../../fw_common/handler_base.hpp"
 #include "pins.hpp"

@@ -73,6 +73,15 @@ $(MSBuildProjectDirectory)\generate_baudctrls.py &gt; $(MSBuildProjectDirectory)
     <Compile Include="dbg.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="hiv.cpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="hiv.hpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="hiv_update.S">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="main.cpp">
       <SubType>compile</SubType>
     </Compile>

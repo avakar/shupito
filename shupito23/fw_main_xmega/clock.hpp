@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <avr/io.h>
 
-struct timer_xd0
+struct clock_t
 {
 	template <uint32_t v>
 	struct us { static const uint32_t value = (v + 7) >> 3; };
@@ -14,13 +14,12 @@ struct timer_xd0
 
 	static void init()
 	{
-		TCD0.CTRLA = TC_CLKSEL_DIV256_gc;
+		TCE0_CTRLA = TC_CLKSEL_DIV256_gc;
 	}
 
-	static time_type value() { return TCD0.CNT; }
+	static time_type value() { return TCE0_CNT; }
 };
 
-typedef timer_xd0 clock_t;
 extern clock_t clock;
 
 #endif // SHUPITO_SHUPITO23_CLOCK_HPP

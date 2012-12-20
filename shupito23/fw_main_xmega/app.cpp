@@ -85,13 +85,12 @@ void app::init()
 	pin_hiv_lo::make_low();
 	pin_hiv_vccio::make_low();
 	pin_hiv_hi::make_low();
-	pin_hiv_pwm::make_low();
 
 	pin_txd::init();
 	pin_aux_rst::init();
 	pin_pdi::init();
 
-	timer_xd0::init();
+	clock_t::init();
 
 	// Setup com_dbg
 	pin_dbg_rx::pullup();
@@ -150,19 +149,17 @@ void app::init()
 	PORTR_PIN1CTRL = PORT_ISC_INPUT_DISABLE_gc;
 
 	// Prepare the ADC
-	ADCA.CH0.CTRL = ADC_CH_INPUTMODE_SINGLEENDED_gc;
-	ADCA.CH0.MUXCTRL = ADC_CH_MUXPOS_PIN7_gc;
 	PORTA_PIN7CTRL = PORT_ISC_INPUT_DISABLE_gc;
+	ADCA_CH0_CTRL = ADC_CH_INPUTMODE_SINGLEENDED_gc;
+	ADCA_CH0_MUXCTRL = ADC_CH_MUXPOS_PIN7_gc;
 
-	PORTA_PIN1CTRL = PORT_ISC_INPUT_DISABLE_gc;
-
-	ADCA.PRESCALER = ADC_PRESCALER_DIV128_gc;
-	ADCA.REFCTRL = ADC_REFSEL_INT1V_gc | ADC_BANDGAP_bm;
-	ADCA.CTRLB = ADC_CONMODE_bm | ADC_RESOLUTION_12BIT_gc;
-	ADCA.CTRLA = ADC_ENABLE_bm;
+	ADCA_PRESCALER = ADC_PRESCALER_DIV128_gc;
+	ADCA_REFCTRL = ADC_REFSEL_INT1V_gc | ADC_BANDGAP_bm;
+	ADCA_CTRLB = ADC_CONMODE_bm | ADC_RESOLUTION_12BIT_gc;
+	ADCA_CTRLA = ADC_ENABLE_bm;
 
 	// Start the conversion immediately
-	ADCA.CH0.CTRL |= ADC_CH_START_bm;
+	ADCA_CH0_CTRL |= ADC_CH_START_bm;
 
 	usb_init(m_usb_sn, sizeof m_usb_sn);
 
@@ -179,6 +176,8 @@ void app::init()
 	m_tunnel_allowed = true;
 
 	m_in_packet_reported = false;
+
+	hiv_init();
 }
 
 void app::run()
@@ -222,12 +221,11 @@ void app::run()
 		}
 	}
 
-	if (ADCA.CH0.INTFLAGS & ADC_CH_CHIF_bm)
+	if (ADCA_CH0_INTFLAGS & ADC_CH_CHIF_bm)
 	{
-		ADCA.CH0.INTFLAGS = ADC_CH_CHIF_bm;
-		m_vccio_voltage = ADCA.CH0RESL;
-		m_vccio_voltage |= (ADCA.CH0RESH << 8);
-		ADCA.CH0.CTRL |= ADC_CH_START_bm;
+		ADCA_CH0_INTFLAGS = ADC_CH_CHIF_bm;
+		m_vccio_voltage = ADCA_CH0RES;
+		ADCA_CH0_CTRL |= ADC_CH_START_bm;
 	}
 
 	if (m_send_vcc_driver_list_scheduled)
@@ -438,24 +436,42 @@ uint8_t app::select_handler(handler_base * new_handler)
 
 	return err;
 }
-	
+
 void app::process_with_debug()
 {
 	if (!com_usb.empty())
 	{
 		switch (com_usb.read())
 		{
-		case '?':
-			send(com_usb, "Shupito 2.3\n");
-			break;
 		case 'A':
 			AVRLIB_ASSERT(!"test assert");
 			break;
 		case 'B':
 			initiate_software_reset();
 			break;
+		case 'v':
+			send(com_usb, "vccio: 0x");
+			send_hex(com_usb, (uint16_t)m_vccio_voltage);
+			com_usb.write('\n');
+			break;
+		case 'V':
+			send(com_usb, "hiv: 0x");
+			send_hex(com_usb, hiv_get_voltage());
+			com_usb.write('\n');
+			break;
+		case 'H':
+			hiv_enable();
+			send(com_usb, "hiv_enable()\n");
+			break;
+		case 'h':
+			hiv_disable();
+			send(com_usb, "hiv_disable()\n");
+			break;
+		case '?':
+			send(com_usb, "Shupito 2.3\n");
+			// fallthrough
 		default:
-			send(com_usb, "?AB\n");
+			send(com_usb, "?ABvVhH\n");
 			break;
 		}
 	}
@@ -536,6 +552,7 @@ void app::disallow_tunnel()
 
 void process_t::operator()() const
 {
+	hiv_process();
 	pdi.process();
 	usb_poll();
 	com_dbg.process_tx();
