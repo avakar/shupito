@@ -121,6 +121,9 @@ usb_desc = {
                 bInterfaceSubClass=0,
                 bInterfaceProtocol=0xff,
                 iInterface=4,
+                functional=[
+                    pack('<BB', 18, 75) + UUID('ea5c3c23-ea74-f841-bfa2-8e1983e796be').bytes
+                    ],
                 endpoints=[
                     EndpointDescriptor(
                         bEndpointAddress=3 | Endpoint.In,
