@@ -12,10 +12,6 @@ AVRLIB_DEFINE_XMEGA_PIN(pin_dbg_tx,    PORTE, 3);
 AVRLIB_DEFINE_XMEGA_PIN(pin_sup_3v3,   PORTB, 2);
 AVRLIB_DEFINE_XMEGA_PIN(pin_sup_5v0,   PORTB, 0);
 
-AVRLIB_DEFINE_XMEGA_PIN(pin_hiv_lo,    PORTC, 0);
-AVRLIB_DEFINE_XMEGA_PIN(pin_hiv_vccio, PORTC, 4);
-AVRLIB_DEFINE_XMEGA_PIN(pin_hiv_hi,    PORTB, 3);
-
 AVRLIB_DEFINE_XMEGA_PIN(pin_aux_rstd,  PORTD, 0);
 AVRLIB_DEFINE_XMEGA_PIN(pin_aux_rstv,  PORTC, 1);
 AVRLIB_DEFINE_XMEGA_PIN(pin_pdid,      PORTD, 1);
@@ -25,7 +21,20 @@ AVRLIB_DEFINE_XMEGA_PIN(pin_rxd,       PORTC, 6);
 AVRLIB_DEFINE_XMEGA_PIN(pin_txdv,      PORTC, 7);
 AVRLIB_DEFINE_XMEGA_PIN(pin_txdd,      PORTD, 2);
 
-typedef pin_totem_drive<pin_hiv_vccio, pin_hiv_lo> pin_rst;
+struct pin_rst
+{
+	static void init();
+	static void process();
+	static bool ready();
+
+	static void make_input();
+	static void make_high();
+	static void make_low();
+	static void set_high();
+	static void set_low();
+
+	static void apply_hiv();
+};
 
 typedef pin_buffer_with_oe<pin_aux_rstv, pin_aux_rstd> pin_aux_rst;
 typedef pin_buffer_with_oe<pin_pdiv, pin_pdid> pin_pdi;

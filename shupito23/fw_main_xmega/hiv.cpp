@@ -92,3 +92,8 @@ uint8_t hiv_get_voltage()
 {
 	return g_cur_voltage;
 }
+
+uint16_t hiv_get_period()
+{
+	return g_per;
+}

@@ -10,6 +10,8 @@ void hiv_enable();
 void hiv_disable();
 
 void hiv_setpoint_recip(uint32_t v);
+
 uint8_t hiv_get_voltage();
+uint16_t hiv_get_period();
 
 #endif // SHUPITO_HIV_HPP

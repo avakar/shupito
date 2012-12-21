@@ -85,6 +85,9 @@ $(MSBuildProjectDirectory)\generate_baudctrls.py &gt; $(MSBuildProjectDirectory)
     <Compile Include="main.cpp">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="pins.cpp">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="pins.hpp">
       <SubType>compile</SubType>
     </Compile>

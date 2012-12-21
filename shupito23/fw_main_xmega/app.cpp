@@ -82,9 +82,7 @@ void app::init()
 	pin_sup_3v3::make_low();
 	pin_sup_5v0::make_low();
 
-	pin_hiv_lo::make_low();
-	pin_hiv_vccio::make_low();
-	pin_hiv_hi::make_low();
+	pin_rst::init();
 
 	pin_txd::init();
 	pin_aux_rst::init();
@@ -467,8 +465,28 @@ void app::process_with_debug()
 			hiv_disable();
 			send(com_usb, "hiv_disable()\n");
 			break;
+		case '1':
+			pin_rst::make_low();
+			break;
+		case '2':
+			pin_rst::make_high();
+			break;
+		case '3':
+			pin_rst::apply_hiv();
+			break;
+		case '4':
+			pin_rst::apply_hiv();
+			break;
+		case ' ':
+			pin_rst::make_input();
+			hiv_disable();
+			break;
 		case '?':
-			send(com_usb, "Shupito 2.3\n");
+			send(com_usb, "Shupito 2.3\nhiv_voltage: ");
+			send_hex(com_usb, hiv_get_voltage());
+			send(com_usb, "\nhiv_period: ");
+			send_hex(com_usb, hiv_get_period());
+			com_usb.write('\n');
 			// fallthrough
 		default:
 			send(com_usb, "?ABvVhH\n");
@@ -552,6 +570,7 @@ void app::disallow_tunnel()
 
 void process_t::operator()() const
 {
+	pin_rst::process();
 	hiv_process();
 	pdi.process();
 	usb_poll();

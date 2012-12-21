@@ -43,11 +43,11 @@ public:
 			ResetPin::make_low();
 			avrlib::wait(clock, Clock::template us<1000>::value, m_process);
 
-			ResetPin::set_value(true);
+			ResetPin::set_high();
 			for (uint8_t i = 0; i < 3; ++i)
 			{
 				avrlib::wait(clock, Clock::template us<1000>::value, m_process);
-				ResetPin::set_value(false);
+				ResetPin::set_low();
 
 				// There has to be a 20ms delay on atmega128
 				avrlib::wait(clock, Clock::template us<20000>::value, m_process);
@@ -63,7 +63,7 @@ public:
 					break;
 				}
 
-				ResetPin::set_value(true);
+				ResetPin::set_high();
 			}
 
 			if (!m_programming_enabled)
