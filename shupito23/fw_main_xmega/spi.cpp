@@ -19,7 +19,7 @@ spi_t::error_t spi_t::start_master(uint16_t bsel, bool sample_on_trailing)
 	pin_xck::make_low();
 
 	if (bsel)
-	--bsel;
+		--bsel;
 	USARTC1.BAUDCTRLA = bsel;
 	USARTC1.BAUDCTRLB = bsel >> 8;
 	USARTC1.CTRLC = USART_CMODE_MSPI_gc | (sample_on_trailing? (1<<1): 0);

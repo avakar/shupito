@@ -112,7 +112,7 @@ void app::init()
 	PR_PRGEN = PR_AES_bm | PR_EBI_bm | PR_RTC_bm | PR_EVSYS_bm | PR_DMA_bm;
 	PR_PRPA = PR_DAC_bm | PR_AC_bm;
 	PR_PRPB = PR_DAC_bm | PR_AC_bm;
-	PR_PRPC = PR_TWI_bm | PR_HIRES_bm | PR_USART1_bm;
+	PR_PRPC = PR_TWI_bm | PR_HIRES_bm;
 	PR_PRPD = PR_TWI_bm | PR_HIRES_bm | PR_TC1_bm | PR_USART1_bm;
 	PR_PRPE = PR_TWI_bm | PR_HIRES_bm;
 
