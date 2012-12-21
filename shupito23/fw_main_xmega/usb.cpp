@@ -35,12 +35,18 @@ enum standard_requests_codes_t
 	usb_set_control_line_state = 0x2122,
 };
 
+struct buffer_addrs_t
+{
+	uint8_t const * first;
+	uint16_t length;
+};
+
 struct usb_action
 {
 	enum in_action_t
 	{
 		ia_none,
-		ia_reset_control,
+		ia_send_buffer,
 		ia_set_address,
 		ia_set_line_coding,
 	};
@@ -49,13 +55,14 @@ struct usb_action
 	union
 	{
 		uint8_t next_address;
+		buffer_addrs_t buffer_addrs;
 	};
 };
 
 static usb_action action = {};
 
-static uint8_t ep0_out_buf[512];
-static uint8_t ep0_in_buf[512];
+static uint8_t ep0_out_buf[64];
+static uint8_t ep0_in_buf[64];
 
 static uint8_t ep1_out_buf[64];
 static uint8_t ep1_in_buf[64];
@@ -127,7 +134,6 @@ void usb_init(char const * sn, uint8_t snlen)
 	usb_snlen = snlen;
 
 	ep_descs->ep0_out.DATAPTR = (uint16_t)&ep0_out_buf;
-	ep_descs->ep0_out.AUXDATA = sizeof ep0_out_buf;
 	ep_descs->ep0_in.DATAPTR  = (uint16_t)&ep0_in_buf;
 
 	ep_descs->ep1_out.DATAPTR = (uint16_t)&ep1_out_buf;
@@ -148,6 +154,17 @@ void usb_init(char const * sn, uint8_t snlen)
 	USB_CTRLA = USB_ENABLE_bm | USB_SPEED_bm | (0 << USB_MAXEP_gp);
 	USB_EPPTR = (uint16_t)ep_descs;
 	USB_CTRLB = USB_ATTACH_bm;
+}
+
+static void prepare_send_buffer_packet(buffer_addrs_t & addrs)
+{
+	uint8_t chunk = addrs.length > 64? 64: addrs.length;
+	memcpy_P(ep0_in_buf, addrs.first, chunk);
+	addrs.first += chunk;
+	addrs.length -= chunk;
+
+	ep_descs->ep0_in.CNT = chunk;
+	ep_descs->ep0_in.STATUS &= ~(USB_EP_BUSNACK0_bm | USB_EP_TRNCOMPL0_bm);
 }
 
 void usb_poll()
@@ -199,17 +216,15 @@ void usb_poll()
 		{
 		case usb_action::ia_set_address:
 			USB_ADDR = action.next_address;
+			ep_descs->ep0_in.STATUS = USB_EP_BUSNACK0_bm;
 			break;
-		case usb_action::ia_reset_control:
-			ep_descs->ep0_in.CTRL = USB_EP_TYPE_CONTROL_gc | USB_EP_STALL_bm | USB_EP_BUFSIZE_64_gc;
-			ep_descs->ep0_out.STATUS = USB_EP_TOGGLE_bm;
+		case usb_action::ia_send_buffer:
+			prepare_send_buffer_packet(action.buffer_addrs);
 			break;
 		default:
+			ep_descs->ep0_in.STATUS = USB_EP_BUSNACK0_bm;
 			break;
 		}
-		
-		action.in_action = usb_action::ia_none;
-		ep_descs->ep0_in.STATUS = USB_EP_BUSNACK0_bm;
 	}
 
 	if (ep_descs->ep0_out.STATUS & USB_EP_TRNCOMPL0_bm)
@@ -263,13 +278,14 @@ void usb_poll()
 		//format(com_dbg, "SETUP %x:%x, %x %x %x, %x\n") % bmRequestType % bRequest % wValue % wIndex % wLength % ep_descs->ep0_out.CNT;
 
 		bool valid = false;
+		action.in_action = usb_action::ia_none;
+		ep_descs->ep0_out.STATUS &= ~USB_EP_SETUP_bm;
 
 		switch ((bmRequestType << 8) | bRequest)
 		{
 		case usb_set_address:
 			action.next_address = wValue & 0x7f;
 			action.in_action = usb_action::ia_set_address;
-			ep_descs->ep0_out.STATUS = USB_EP_BUSNACK0_bm;
 			ep_descs->ep0_in.CNT = 0;
 			ep_descs->ep0_in.STATUS = USB_EP_TOGGLE_bm;
 			valid = true;
@@ -278,7 +294,6 @@ void usb_poll()
 			if ((wValue & 0xff) < 2)
 			{
 				set_config(wValue);
-				ep_descs->ep0_out.STATUS = USB_EP_BUSNACK0_bm;
 				ep_descs->ep0_in.CNT = 0;
 				ep_descs->ep0_in.STATUS = USB_EP_TOGGLE_bm;
 				valid = true;
@@ -303,11 +318,13 @@ void usb_poll()
 						wLength = snlen;
 					ep0_in_buf[0] = snlen;
 					ep0_in_buf[1] = 3;
-					for (uint8_t i = 0; i < usb_snlen; ++i)
+					for (uint8_t i = 0; i < snlen; ++i)
 					{
 						ep0_in_buf[2*i+2] = usb_sn[i];
 						ep0_in_buf[2*i+3] = 0;
 					}
+					ep_descs->ep0_in.CNT = wLength;
+					ep_descs->ep0_in.STATUS = USB_EP_TOGGLE_bm;
 					valid = true;
 				}
 				else
@@ -319,7 +336,11 @@ void usb_poll()
 						{
 							if (entry.size < wLength)
 								wLength = entry.size;
-							memcpy_P(ep0_in_buf, usb_descriptors + entry.offset, wLength);
+							action.buffer_addrs.first = usb_descriptors + entry.offset;
+							action.buffer_addrs.length = wLength;
+
+							prepare_send_buffer_packet(action.buffer_addrs);
+							action.in_action = usb_action::ia_send_buffer;
 							valid = true;
 							break;
 						}
@@ -327,14 +348,7 @@ void usb_poll()
 				}
 
 				if (valid)
-				{
-					ep_descs->ep0_in.CNT = USB_EP_ZLP_bm | wLength;
-					ep_descs->ep0_in.AUXDATA = 0;
-					ep_descs->ep0_in.CTRL = USB_EP_TYPE_CONTROL_gc | USB_EP_MULTIPKT_bm | USB_EP_BUFSIZE_64_gc;
-					ep_descs->ep0_in.STATUS = USB_EP_TOGGLE_bm;
-					ep_descs->ep0_out.STATUS = USB_EP_BUSNACK0_bm;
-					action.in_action = usb_action::ia_reset_control;
-				}
+					ep_descs->ep0_out.STATUS &= ~USB_EP_BUSNACK0_bm;
 			}
 			break;
 
@@ -362,8 +376,6 @@ void usb_poll()
 
 		if (!valid)
 		{
-			action.in_action = usb_action::ia_none;
-			ep_descs->ep0_out.STATUS = USB_EP_BUSNACK0_bm;
 			ep_descs->ep0_out.CTRL = USB_EP_TYPE_CONTROL_gc | USB_EP_STALL_bm | USB_EP_BUFSIZE_64_gc;
 			ep_descs->ep0_in.CTRL = USB_EP_TYPE_CONTROL_gc | USB_EP_STALL_bm | USB_EP_BUFSIZE_64_gc;
 		}
