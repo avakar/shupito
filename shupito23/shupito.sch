@@ -8822,7 +8822,7 @@ In this library the device names are the same as the pin names of the symbols, t
 <part name="Q10" library="transistors" deviceset="N-MOSFET" device="-SOT323-GSD" value="PMF280UN,115-1758094"/>
 <part name="R1" library="rcl" deviceset="R-EU_" device="R0603" value="330"/>
 <part name="R2" library="rcl" deviceset="R-EU_" device="R0603" value="6k8"/>
-<part name="Q9" library="transistors" deviceset="PNP-BIAS" device="-SOT323-BEC" value="DTA144-1680214"/>
+<part name="Q9" library="transistors" deviceset="PNP-BIAS" device="-SOT323-BEC" value="PDTA114TU-8736731"/>
 <part name="R13" library="rcl" deviceset="R-EU_" device="R0603" value="22k 1%"/>
 <part name="R14" library="rcl" deviceset="R-EU_" device="R0603" value="1k5 1%"/>
 <part name="GND23" library="supply1" deviceset="GND" device=""/>
@@ -8832,7 +8832,7 @@ In this library the device names are the same as the pin names of the symbols, t
 <part name="X2" library="usb" deviceset="USB" device="-MICRO-B-BOTTOM"/>
 <part name="P+1" library="supply1" deviceset="+5V" device=""/>
 <part name="P+3" library="supply1" deviceset="+5V" device=""/>
-<part name="Q6" library="transistors" deviceset="PNP-BIAS" device="-SOT323-BEC" value="DTA144-1680214"/>
+<part name="Q6" library="transistors" deviceset="PNP-BIAS" device="-SOT323-BEC" value="PDTA114TU-8736731"/>
 <part name="Q11" library="transistors" deviceset="NPN-BIAS" device="-SOT323-BEC" value="PDTC123YU-1757992"/>
 <part name="VCC6" library="supply1" deviceset="VCCIO" device=""/>
 <part name="C2" library="rcl" deviceset="C-EU" device="C0603K" value="10n"/>
