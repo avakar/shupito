@@ -17,3 +17,7 @@ shupito2\usb_fw\default
 **.atsuo
 **.orig
 shupito2\fw_main_xmega\desc.h
+TcfTransactionLog.csv
+
+shupito23\fw_main_xmega\baudctrls.h
+shupito23\fw_main_xmega\usb_descriptors.h
