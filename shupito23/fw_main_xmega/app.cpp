@@ -105,8 +105,7 @@ void app::init()
 		m_usb_sn[2*i] = digits[val >> 4];
 		m_usb_sn[2*i+1] = digits[val & 0xf];
 	}
-	ADCA.CALL = pgm_read_byte(&PRODSIGNATURES_ADCACAL0);
-	ADCA.CALH = pgm_read_byte(&PRODSIGNATURES_ADCACAL1);
+	ADCA_CAL = pgm_read_word(&PRODSIGNATURES_ADCACAL0);
 	NVM_CMD = NVM_CMD_NO_OPERATION_gc;
 
 	// Disable unused peripherals to decrease power consumption and noise
@@ -167,6 +166,7 @@ void app::init()
 	m_send_vccio_state_scheduled = false;
 	m_vccio_drive_state = vccio_disabled;
 	m_vccio_drive_check_timeout.init_stopped(clock, clock_t::us<200000>::value);
+	m_vccio_filter.init();
 
 	m_handler = 0;
 
@@ -205,7 +205,8 @@ void app::run()
 	if (ADCA_CH0_INTFLAGS & ADC_CH_CHIF_bm)
 	{
 		ADCA_CH0_INTFLAGS = ADC_CH_CHIF_bm;
-		m_vccio_voltage = ADCA_CH0RES;
+		m_vccio_filter.push(ADCA_CH0RES);
+		m_vccio_voltage = m_vccio_filter.current();
 		ADCA_CH0_CTRL |= ADC_CH_START_bm;
 	}
 

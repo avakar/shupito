@@ -4,6 +4,7 @@
 #include "clock.hpp"
 #include "spi.hpp"
 #include "hiv.hpp"
+#include "voltage.hpp"
 #include "../../fw_common/pdi.hpp"
 #include "../../fw_common/handler_base.hpp"
 #include "pins.hpp"
@@ -95,6 +96,7 @@ private:
 	bool m_send_vccio_state_scheduled;
 	enum { vccio_disabled, vccio_enabled, vccio_active } m_vccio_drive_state;
 	avrlib::timeout<clock_t> m_vccio_drive_check_timeout;
+	voltage_filter<32> m_vccio_filter;
 
 	handler_avricsp<spi_t, clock_t, pin_rst, process_t> m_handler_avricsp;
 	handler_xmega<my_pdi_t, clock_t, process_t> m_handler_pdi;
