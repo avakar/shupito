@@ -22,23 +22,7 @@ yb_desc = make_yb_desc(UUID('093d7f33-cdc6-4928-955d-513d17a85358'),
                     1,
                     (1<<12)
                     )),
-            Config(UUID('ee047e35-dec8-48ab-b194-e3762c8f6b66'), 1, 4,  # JTAG
-                data=struct.pack('<BI', 1, 32000000)),
-            Config(UUID('76e37480-3f61-4e7a-9b1b-37af6bd418fa'), 1, 5,  # cc25xx
-                data=struct.pack('<BIHH',
-                    1, #version
-                    16000000,
-                    1,
-                    (1<<12)
-                    )),
-            Config(UUID('633125ab-32e0-49ec-b240-7d845bb70b2d'), 1, 3,  # SPI
-                data=struct.pack('<BIHH',
-                    1, # version
-                    16000000,
-                    1,
-                    (1<<12)
-                    ))
-        ),
+            ),
         Config(UUID('1d4738a0-fc34-4f71-aa73-57881b278cb1'), 10, 1, flags=0x03,  # measurement
             data=struct.pack('<BI',
                 1, # version
@@ -62,7 +46,7 @@ usb_desc = {
         bMaxPacketSize0=64,
         idVendor=0x4a61,
         idProduct=0x679c,
-        bcdDevice=0x0001,
+        bcdDevice=0x0203,
         iManufacturer=0,
         iProduct=1,
         iSerialNumber=2,
@@ -78,7 +62,6 @@ usb_desc = {
                 bInterfaceClass=0xff,
                 bInterfaceSubClass=0,
                 bInterfaceProtocol=0,
-                iInterface=5,
                 functional=[
                     CustomDescriptor(75, yb_desc)
                     ],
@@ -143,7 +126,6 @@ usb_desc = {
     0x301: StringDescriptor('Shupito'),
     0x303: StringDescriptor('.debug'),
     0x304: StringDescriptor('tunnel'),
-    0x305: StringDescriptor('yb'),
     }
 
 if __name__ == '__main__':
