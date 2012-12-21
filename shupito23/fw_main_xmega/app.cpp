@@ -173,8 +173,6 @@ void app::init()
 	m_tunnel_open = false;
 	m_tunnel_allowed = true;
 
-	m_in_packet_reported = false;
-
 	hiv_init();
 }
 
@@ -182,23 +180,8 @@ void app::run()
 {
 	if (uint16_t size = usb_yb_has_out_packet())
 	{
-		if (!m_in_packet_reported)
-		{
-			for (uint8_t i = 0; i != size; ++i)
-			{
-				if (i != 0)
-					com_usb.write(':');
-				send_hex(com_usb, usb_yb_out_packet[i], 2);
-			}
-			com_usb.write('\n');
-			m_in_packet_reported = true;
-		}
-
 		if (this->handle_packet(usb_yb_out_packet[0], usb_yb_out_packet + 1, size - 1, m_usb_writer))
-		{
 			usb_yb_confirm_out_packet();
-			m_in_packet_reported = false;
-		}
 	}
 
 	if (m_vccio_timeout)
@@ -433,66 +416,6 @@ uint8_t app::select_handler(handler_base * new_handler)
 	}
 
 	return err;
-}
-
-void app::process_with_debug()
-{
-	if (!com_usb.empty())
-	{
-		switch (com_usb.read())
-		{
-		case 'A':
-			AVRLIB_ASSERT(!"test assert");
-			break;
-		case 'B':
-			initiate_software_reset();
-			break;
-		case 'v':
-			send(com_usb, "vccio: 0x");
-			send_hex(com_usb, (uint16_t)m_vccio_voltage);
-			com_usb.write('\n');
-			break;
-		case 'V':
-			send(com_usb, "hiv: 0x");
-			send_hex(com_usb, hiv_get_voltage());
-			com_usb.write('\n');
-			break;
-		case 'H':
-			hiv_enable();
-			send(com_usb, "hiv_enable()\n");
-			break;
-		case 'h':
-			hiv_disable();
-			send(com_usb, "hiv_disable()\n");
-			break;
-		case '1':
-			pin_rst::make_low();
-			break;
-		case '2':
-			pin_rst::make_high();
-			break;
-		case '3':
-			pin_rst::apply_hiv();
-			break;
-		case '4':
-			pin_rst::apply_hiv();
-			break;
-		case ' ':
-			pin_rst::make_input();
-			hiv_disable();
-			break;
-		case '?':
-			send(com_usb, "Shupito 2.3\nhiv_voltage: ");
-			send_hex(com_usb, hiv_get_voltage());
-			send(com_usb, "\nhiv_period: ");
-			send_hex(com_usb, hiv_get_period());
-			com_usb.write('\n');
-			// fallthrough
-		default:
-			send(com_usb, "?ABvVhH\n");
-			break;
-		}
-	}
 }
 
 #include "baudctrls.h"

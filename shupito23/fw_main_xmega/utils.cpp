@@ -4,6 +4,8 @@
 #include "dbg.h"
 #include "app.hpp"
 
+static bool g_assert_disabled = false;
+
 ISR(PORTA_INT0_vect, __attribute__((noreturn, naked, flatten)))
 {
 	initiate_software_reset();
@@ -11,7 +13,12 @@ ISR(PORTA_INT0_vect, __attribute__((noreturn, naked, flatten)))
 
 void avrlib::assertion_failed(char const * msg, char const * file, int lineno)
 {
+	if (g_assert_disabled)
+		return;
+
 	pin_led::set_high();
+
+	g_assert_disabled = true;
 	send(com_usb, "Assertion failed: ");
 	send(com_usb, msg);
 	send(com_usb, "\n    ");
@@ -20,14 +27,16 @@ void avrlib::assertion_failed(char const * msg, char const * file, int lineno)
 	send_hex(com_usb, lineno);
 	send(com_usb, ")\n");
 	for (;;)
-	g_process_with_debug();
+		g_process_with_debug();
 }
 
 void initiate_software_reset()
 {
 	CCP = CCP_IOREG_gc;
 	RST_CTRL = RST_SWRST_bm;
-	for (;;) {}
+	for (;;)
+	{
+	}
 }
 
 void enable_interrupts()
@@ -51,5 +60,7 @@ bool software_reset_occurred()
 void start_flip_bootloader()
 {
 	asm("jmp " STRINGIFY(BOOT_SECTION_START) " + 0x1fc");
-	for (;;) {}
+	for (;;)
+	{
+	}
 }

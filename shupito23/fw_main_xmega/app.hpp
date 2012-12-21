@@ -104,8 +104,6 @@ private:
 	bool m_tunnel_allowed;
 	uint16_t m_tunnel_baudctrl;
 	bool m_tunnel_dblspeed;
-
-	bool m_in_packet_reported;
 };
 
 extern app g_app;
