@@ -94,6 +94,12 @@ $(MSBuildProjectDirectory)\generate_baudctrls.py &gt; $(MSBuildProjectDirectory)
     <Compile Include="hiv_update.S">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="led.cpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="led.hpp">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="main.cpp">
       <SubType>compile</SubType>
     </Compile>

@@ -1,6 +1,7 @@
 #include "app.hpp"
 #include "dbg.h"
 #include "utils.hpp"
+#include "led.hpp"
 
 void app::process_with_debug()
 {
@@ -13,6 +14,9 @@ void app::process_with_debug()
 			break;
 		case 'B':
 			initiate_software_reset();
+			break;
+		case 'b':
+			led_blink_short();
 			break;
 		case 'v':
 			send(com_usb, "vccio: 0x");
@@ -57,14 +61,14 @@ void app::process_with_debug()
 			com_usb.write('\n');
 			// fallthrough
 		default:
-			send(com_usb, "?ABvVhH1234\n");
+			send(com_usb, "?AbBvVhH1234\n");
 			break;
 #else
 		case '?':
 			send(com_usb, "Shupito 2.3\n");
 			// fallthrough
 		default:
-			send(com_usb, "?ABvV\n");
+			send(com_usb, "?AbBvV\n");
 			break;
 #endif
 		}

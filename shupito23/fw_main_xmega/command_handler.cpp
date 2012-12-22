@@ -70,6 +70,21 @@ bool app::handle_packet(uint8_t cmd, uint8_t const * cp, uint8_t size, yb_writer
 			initiate_software_reset();
 		break;
 
+	case 0xd: // led
+		if (size == 1)
+		{
+			switch (cp[0])
+			{
+			case 1:
+				led_blink_short();
+				break;
+			case 2:
+				led_blink_long();
+				break;
+			}
+		}
+		break;
+
 	default:
 		if (m_handler)
 			return m_handler->handle_command(cmd, cp, size, w);

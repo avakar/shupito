@@ -5,6 +5,7 @@
 #include "spi.hpp"
 #include "hiv.hpp"
 #include "voltage.hpp"
+#include "led.hpp"
 #include "../../fw_common/pdi.hpp"
 #include "../../fw_common/handler_base.hpp"
 #include "pins.hpp"
@@ -16,7 +17,7 @@
 #include "../../fw_common/handler_xmega.hpp"
 #include "../../fw_common/handler_avricsp.hpp"
 
-typedef pdi_t<clock_t, pin_aux_rst, pin_pdi, pin_led> my_pdi_t;
+typedef pdi_t<clock_t, pin_aux_rst, pin_pdi, led_holder> my_pdi_t;
 
 static uint8_t volatile const * sn_calib_indexes[] = {
 	&PRODSIGNATURES_LOTNUM0,

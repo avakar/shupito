@@ -3,7 +3,7 @@
 
 #include "avrlib/buffer.hpp"
 
-template <typename Clock, typename PdiClk, typename PdiData, typename PinLed>
+template <typename Clock, typename PdiClk, typename PdiData, typename Led>
 class pdi_t
 {
 public:
@@ -25,7 +25,7 @@ public:
 		// to make sure that the last byte was received correctly
 		m_state = st_unrst;
 		m_time_base = m_clock.value();
-		PinLed::set_value(false);
+		m_led.off();
 	}
 
 	void init(uint16_t bsel)
@@ -139,7 +139,7 @@ public:
 			}
 			break;
 		case st_idle:
-			PinLed::set_value(false);
+			m_led.off();
 			break;
 		case st_rx_done:
 			m_time_base = m_clock.value();
@@ -150,7 +150,7 @@ public:
 				m_state = st_idle;
 			//fallthrough
 		case st_busy:
-			PinLed::set_value(true);
+			m_led.on();
 			break;
 		case st_unrst:
 			if (m_clock.value() - m_time_base > Clock::template us<100>::value)
@@ -227,6 +227,7 @@ private:
 	avrlib::buffer<uint8_t, 16> m_rx_buffer;
 	avrlib::buffer<uint8_t, 16> m_tx_buffer;
 	volatile uint8_t m_rx_count;
+	Led m_led;
 
 	enum { st_disabled, st_rst_disable, st_wait_ticks, st_idle, st_rx_done, st_rx_done_wait, st_busy, st_unrst } volatile m_state;
 };

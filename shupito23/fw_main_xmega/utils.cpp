@@ -3,6 +3,7 @@
 #include "usb.h"
 #include "dbg.h"
 #include "app.hpp"
+#include "led.hpp"
 
 static bool g_assert_disabled = false;
 
@@ -16,7 +17,7 @@ void avrlib::assertion_failed(char const * msg, char const * file, int lineno)
 	if (g_assert_disabled)
 		return;
 
-	pin_led::set_high();
+	led_on();
 
 	g_assert_disabled = true;
 	send(com_usb, "Assertion failed: ");

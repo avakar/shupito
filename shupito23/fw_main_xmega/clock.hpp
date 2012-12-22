@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <avr/io.h>
+#include "../../fw_common/avrlib/stopwatch.hpp"
 
 struct clock_t
 {

@@ -3,6 +3,7 @@
 #include "dbg.h"
 #include "utils.hpp"
 #include "btn.hpp"
+#include "led.hpp"
 
 app g_app;
 
@@ -79,7 +80,7 @@ app::app()
 
 void app::init()
 {
-	pin_led::make_low();
+	led_init();
 	pin_sup_3v3::make_low();
 	pin_sup_5v0::make_low();
 
@@ -367,6 +368,8 @@ uint8_t app::select_handler(handler_base * new_handler)
 
 void app::open_tunnel(uint32_t baudrate)
 {
+	led_blink_short();
+
 	uint32_t last_val = 0;
 	uint16_t selected_index = usart_baudctrl_count-1;
 	for (uint16_t i = 0; i < sizeof usart_baudctrls; i += 5)
@@ -438,6 +441,7 @@ void app::disallow_tunnel()
 
 void process_t::operator()() const
 {
+	led_process();
 	pin_rst::process();
 	btn_process();
 	hiv_process();

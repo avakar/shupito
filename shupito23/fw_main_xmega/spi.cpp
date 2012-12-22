@@ -1,6 +1,7 @@
 #include "spi.hpp"
 #include "pins.hpp"
 #include "app.hpp"
+#include "led.hpp"
 
 void spi_t::clear()
 {
@@ -30,11 +31,11 @@ spi_t::error_t spi_t::start_master(uint16_t bsel, bool sample_on_trailing)
 uint8_t spi_t::send(uint8_t v)
 {
 	USARTC1.DATA = v;
-	pin_led::set_value(true);
+	led_on();
 	while ((USARTC1.STATUS & USART_RXCIF_bm) == 0)
 	{
 	}
-	pin_led::set_value(false);
+	led_off();
 	return USARTC1.DATA;
 }
 
