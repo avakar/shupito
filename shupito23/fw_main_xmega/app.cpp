@@ -2,6 +2,7 @@
 #include "usb.h"
 #include "dbg.h"
 #include "utils.hpp"
+#include "btn.hpp"
 
 app g_app;
 
@@ -174,6 +175,9 @@ void app::init()
 	m_tunnel_allowed = true;
 
 	hiv_init();
+
+	btn_init();
+	m_assumed_btn_state = btn_pressed();
 }
 
 void app::run()
@@ -199,6 +203,18 @@ void app::run()
 		else
 		{
 			m_vccio_timeout.force();
+		}
+	}
+
+	if (m_assumed_btn_state != btn_pressed())
+	{
+		if (uint8_t * buf = m_usb_writer.alloc(0xc, 2))
+		{
+			m_assumed_btn_state = !m_assumed_btn_state;
+
+			*buf++ = 1;
+			*buf++ = m_assumed_btn_state;
+			m_usb_writer.commit();
 		}
 	}
 
@@ -423,6 +439,7 @@ void app::disallow_tunnel()
 void process_t::operator()() const
 {
 	pin_rst::process();
+	btn_process();
 	hiv_process();
 	pdi.process();
 	usb_poll();

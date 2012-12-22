@@ -30,12 +30,13 @@ yb_desc = make_yb_desc(UUID('093d7f33-cdc6-4928-955d-513d17a85358'),
                 1, # version
                 0x0002B401) # 16.16 fixpoint millivolts per unit
             ),
-        Config(UUID('c49124d9-4629-4aef-ae35-ddc32c21b279'), 11, 1, flags=0x04,  # fw info/update
+        Config(UUID('c49124d9-4629-4aef-ae35-ddc32c21b279'), 11, 1, flags=0x03,  # fw info/update
             data=(struct.pack('<BBBIh', 1,
                 2, 3, # hw version
                 hi.timestamp, -hi.zoffset/60) # fw timestamp
                 + hi.rev_hash), # fw version
-            )
+            ),
+        Config(UUID('e5e646a8-beb6-4a68-91f2-f005c72e9e57'), 12, 1, flags=0x03) # button
         )
     )
 

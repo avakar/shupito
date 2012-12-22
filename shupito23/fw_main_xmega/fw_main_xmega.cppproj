@@ -64,6 +64,12 @@ $(MSBuildProjectDirectory)\generate_baudctrls.py &gt; $(MSBuildProjectDirectory)
     <Compile Include="app.hpp">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="btn.cpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="btn.hpp">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="clock.cpp">
       <SubType>compile</SubType>
     </Compile>

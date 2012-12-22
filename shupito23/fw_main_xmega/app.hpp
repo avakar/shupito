@@ -106,6 +106,8 @@ private:
 	bool m_tunnel_allowed;
 	uint16_t m_tunnel_baudctrl;
 	bool m_tunnel_dblspeed;
+
+	bool m_assumed_btn_state;
 };
 
 extern app g_app;

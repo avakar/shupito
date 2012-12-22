@@ -34,7 +34,6 @@ int main()
 {
 	if (software_reset_occurred())
 		start_flip_bootloader();
-	setup_bootloader_button();
 	enable_interrupts();
 	setup_clocks();
 
