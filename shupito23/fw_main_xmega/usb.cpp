@@ -1,6 +1,7 @@
 #include "usb.h"
 #include "dbg.h"
 #include "app.hpp"
+#include "led.hpp"
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <string.h>
@@ -177,6 +178,8 @@ void usb_poll()
 		ep_descs->ep0_out.CTRL = USB_EP_TYPE_CONTROL_gc | USB_EP_STALL_bm | USB_EP_BUFSIZE_64_gc;
 		ep_descs->ep0_in.CTRL = USB_EP_TYPE_CONTROL_gc | USB_EP_STALL_bm | USB_EP_BUFSIZE_64_gc;
 		USB_INTFLAGSACLR = USB_RSTIF_bm;
+
+		led_blink_long();
 		return;
 	}
 
