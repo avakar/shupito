@@ -70,6 +70,9 @@ $(MSBuildProjectDirectory)\generate_baudctrls.py &gt; $(MSBuildProjectDirectory)
     <Compile Include="clock.hpp">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="command_handler.cpp">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="dbg.cpp">
       <SubType>compile</SubType>
     </Compile>

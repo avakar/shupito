@@ -14,24 +14,28 @@ yb_desc = make_yb_desc(UUID('093d7f33-cdc6-4928-955d-513d17a85358'),
                     16000000,
                     1,
                     (1<<12)
-                    )),
+                    )
+                ),
             Config(UUID('71efb903-3030-4fd3-8896-1946aba37efc'), 1, 8,  # PDI
                 data=struct.pack('<BIHH',
                     1, #version
                     16000000,
                     1,
                     (1<<12)
-                    )),
+                    )
+                ),
             ),
         Config(UUID('1d4738a0-fc34-4f71-aa73-57881b278cb1'), 10, 1, flags=0x03,  # measurement
             data=struct.pack('<BI',
                 1, # version
-                0x0002B401)), # 16.16 fixpoint millivolts per unit
-        Config(UUID('c49124d9-4629-4aef-ae35-ddc32c21b279'), 0, 0, flags=0x04,   # info
+                0x0002B401) # 16.16 fixpoint millivolts per unit
+            ),
+        Config(UUID('c49124d9-4629-4aef-ae35-ddc32c21b279'), 11, 1, flags=0x04,  # fw info/update
             data=(struct.pack('<BBBIh', 1,
                 2, 3, # hw version
                 hi.timestamp, -hi.zoffset/60) # fw timestamp
-                + hi.rev_hash)) # fw version
+                + hi.rev_hash), # fw version
+            )
         )
     )
 
@@ -133,5 +137,5 @@ if __name__ == '__main__':
         fout = sys.stdout
     else:
         fout = open(sys.argv[1], 'w')
-    print_descriptors(fout, usb_desc)
+    print_descriptors(fout, usb_desc, rev_hash=hi.rev_hash)
     fout.close()
