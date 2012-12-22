@@ -50,5 +50,5 @@ void led_blink_short()
 
 void led_blink_long()
 {
-	led_blink(clock_t::us<25000>::value);
+	led_blink(clock_t::us<250000>::value);
 }
