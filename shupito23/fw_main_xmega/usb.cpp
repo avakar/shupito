@@ -8,6 +8,7 @@
 
 com_usb_t com_usb;
 com_usb_tunnel_t com_usb_tunnel;
+com_usb_tunnel_t com_usb_tunnel2;
 bool usb_tunnel_send_test_packet = false;
 
 #include "usb_descriptors.h"
@@ -58,6 +59,7 @@ struct usb_action
 	{
 		uint8_t next_address;
 		buffer_addrs_t buffer_addrs;
+		uint8_t intf;
 	};
 };
 
@@ -75,6 +77,9 @@ uint8_t usb_yb_in_packet[256];
 static uint8_t ep3_out_buf[64];
 static uint8_t ep3_in_buf[64];
 
+static uint8_t ep4_out_buf[64];
+static uint8_t ep4_in_buf[64];
+
 struct ep_descs_t
 {
 	USB_EP_t ep0_out;
@@ -85,6 +90,8 @@ struct ep_descs_t
 	USB_EP_t ep2_in;
 	USB_EP_t ep3_out;
 	USB_EP_t ep3_in;
+	USB_EP_t ep4_out;
+	USB_EP_t ep4_in;
 };
 
 // Note that __attribute__((aligned)) is actually ignored by avr-gcc for some reason.
@@ -118,7 +125,11 @@ static bool set_config(uint8_t config)
 		ep_descs->ep3_out.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
 		ep_descs->ep3_in.STATUS = USB_EP_BUSNACK0_bm;
 		ep_descs->ep3_in.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
-		USB_CTRLA = USB_ENABLE_bm | USB_SPEED_bm | (3 << USB_MAXEP_gp);
+		ep_descs->ep4_out.STATUS = 0;
+		ep_descs->ep4_out.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
+		ep_descs->ep4_in.STATUS = USB_EP_BUSNACK0_bm;
+		ep_descs->ep4_in.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
+		USB_CTRLA = USB_ENABLE_bm | USB_SPEED_bm | (4 << USB_MAXEP_gp);
 	}
 	else
 	{
@@ -146,6 +157,9 @@ void usb_init(char const * sn, uint8_t snlen)
 
 	ep_descs->ep3_out.DATAPTR = (uint16_t)&ep3_out_buf;
 	ep_descs->ep3_in.DATAPTR  = (uint16_t)&ep3_in_buf;
+
+	ep_descs->ep4_out.DATAPTR = (uint16_t)&ep4_out_buf;
+	ep_descs->ep4_in.DATAPTR  = (uint16_t)&ep4_in_buf;
 
 	NVM_CMD = NVM_CMD_READ_CALIB_ROW_gc;
 	USB_CAL0 = pgm_read_byte(PRODSIGNATURES_USBCAL0);
@@ -222,6 +236,21 @@ void usb_poll()
 		ep_descs->ep3_out.STATUS &= ~USB_EP_BUSNACK0_bm;
 	}
 
+	if ((ep_descs->ep4_in.STATUS & USB_EP_BUSNACK0_bm) && com_usb_tunnel2.tx_size() != 0)
+	{
+		memcpy(ep4_in_buf, com_usb_tunnel2.tx_buffer(), com_usb_tunnel2.tx_size());
+		ep_descs->ep4_in.CNT = com_usb_tunnel2.tx_size();
+		ep_descs->ep4_in.STATUS &= ~USB_EP_BUSNACK0_bm;
+		com_usb_tunnel2.tx_clear();
+	}
+
+	if ((ep_descs->ep4_out.STATUS & USB_EP_BUSNACK0_bm) && com_usb_tunnel2.rx_size() == 0)
+	{
+		memcpy(com_usb_tunnel2.rx_buffer(), ep4_out_buf, ep_descs->ep4_out.CNT);
+		com_usb_tunnel2.rx_reset(ep_descs->ep4_out.CNT);
+		ep_descs->ep4_out.STATUS &= ~USB_EP_BUSNACK0_bm;
+	}
+
 	if (ep_descs->ep0_in.STATUS & USB_EP_TRNCOMPL0_bm)
 	{
 		switch (action.in_action)
@@ -252,7 +281,7 @@ void usb_poll()
 					| ((uint32_t)ep0_out_buf[1] << 8)
 					| ((uint32_t)ep0_out_buf[2] << 16)
 					| ((uint32_t)ep0_out_buf[3] << 24);
-				g_app.open_tunnel(dwDTERate);
+				g_app.open_tunnel(action.intf - 2, dwDTERate);
 
 				ep_descs->ep0_in.CNT = 0;
 				ep_descs->ep0_in.STATUS = USB_EP_TOGGLE_bm;
@@ -365,9 +394,10 @@ void usb_poll()
 			break;
 
 		case usb_set_line_coding:
-			if (wIndex == 2 && wLength == 7)
+			if ((wIndex == 2 || wIndex == 3) && wLength == 7)
 			{
 				action.in_action = usb_action::ia_set_line_coding;
+				action.intf = wIndex;
 				ep_descs->ep0_out.STATUS = USB_EP_TOGGLE_bm;
 				valid = true;
 			}
@@ -375,9 +405,10 @@ void usb_poll()
 
 		case usb_set_control_line_state:
 			if (wIndex == 2)
-			{
 				g_app.close_tunnel();
 
+			if (wIndex == 2 || wIndex == 3)
+			{
 				ep_descs->ep0_out.STATUS = USB_EP_BUSNACK0_bm;
 				ep_descs->ep0_in.CNT = 0;
 				ep_descs->ep0_in.STATUS = USB_EP_TOGGLE_bm;

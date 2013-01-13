@@ -126,12 +126,36 @@ usb_desc = {
                         bInterval=16)
                     ]
                 ),
+            InterfaceDescriptor(
+                bInterfaceNumber=3,
+                bAlternateSetting=0,
+                bInterfaceClass=0x0A,
+                bInterfaceSubClass=0,
+                bInterfaceProtocol=0xff,
+                iInterface=5,
+                functional=[
+                    pack('<BB', 18, 75) + UUID('ea5c3c23-ea74-f841-bfa2-8e1983e796be').bytes
+                    ],
+                endpoints=[
+                    EndpointDescriptor(
+                        bEndpointAddress=4 | Endpoint.In,
+                        bmAttributes=Endpoint.Bulk,
+                        wMaxPacketSize=64,
+                        bInterval=16),
+                    EndpointDescriptor(
+                        bEndpointAddress=4,
+                        bmAttributes=Endpoint.Bulk,
+                        wMaxPacketSize=64,
+                        bInterval=16)
+                    ]
+                ),
             ]
         ),
     0x300: LangidsDescriptor([0x409]),
     0x301: StringDescriptor('Shupito'),
     0x303: StringDescriptor('.debug'),
     0x304: StringDescriptor('tunnel'),
+    0x305: StringDescriptor('bluetooth'),
     }
 
 if __name__ == '__main__':

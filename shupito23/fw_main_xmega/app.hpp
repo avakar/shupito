@@ -80,11 +80,14 @@ public:
 	uint8_t select_handler(handler_base * new_handler);
 	void process_with_debug();
 
-	void open_tunnel(uint32_t baudrate);
+	void open_tunnel(uint8_t which, uint32_t baudrate);
 	void close_tunnel();
 
 	void allow_tunnel();
 	void disallow_tunnel();
+
+	void start_tunnel();
+	void stop_tunnel();
 
 private:
 	char m_usb_sn[2*sn_calib_indexes_count];

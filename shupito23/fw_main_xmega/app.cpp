@@ -277,6 +277,12 @@ void app::run()
 
 	while (!com_tunnel.empty() && com_usb_tunnel.tx_ready())
 		com_usb_tunnel.write(com_tunnel.read());
+
+	while (!com_usb_tunnel2.empty() && com_dbg.tx_ready())
+		com_dbg.write(com_usb_tunnel2.read());
+
+	while (!com_dbg.empty() && com_usb_tunnel2.tx_ready())
+		com_usb_tunnel2.write(com_dbg.read());
 }
 
 bool app::send_vccio_state(yb_writer & w)
@@ -366,7 +372,20 @@ uint8_t app::select_handler(handler_base * new_handler)
 
 #include "baudctrls.h"
 
-void app::open_tunnel(uint32_t baudrate)
+void app::start_tunnel()
+{
+	com_tunnel.usart().close();
+	pin_txd::make_high();
+	com_tunnel.usart().open(m_tunnel_baudctrl, /*rx_interrupt=*/true, /*synchronous=*/false, m_tunnel_dblspeed);
+}
+
+void app::stop_tunnel()
+{
+	com_tunnel.usart().close();
+	pin_txd::make_input();
+}
+
+void app::open_tunnel(uint8_t which, uint32_t baudrate)
 {
 	led_blink_short();
 
@@ -391,51 +410,43 @@ void app::open_tunnel(uint32_t baudrate)
 		last_val = val;
 	}
 
-	m_tunnel_dblspeed = (pgm_read_byte(&usart_baudctrls[selected_index+2]) & 0x7f) != 0;
+	bool dblspeed = (pgm_read_byte(&usart_baudctrls[selected_index+2]) & 0x7f) != 0;
 
 	uint8_t blo = pgm_read_byte(&usart_baudctrls[selected_index+3]);
 	uint8_t bhi = pgm_read_byte(&usart_baudctrls[selected_index+4]);
-	m_tunnel_baudctrl = blo | (bhi << 8);
-	m_tunnel_open = true;
 
-	if (m_tunnel_allowed)
+	if (which == 0)
 	{
-		com_tunnel.usart().close();
-		pin_txd::make_high();
-		com_tunnel.usart().open(m_tunnel_baudctrl, /*rx_interrupt=*/true, /*synchronous=*/false, m_tunnel_dblspeed);
+		m_tunnel_dblspeed = dblspeed;
+		m_tunnel_baudctrl = blo | (bhi << 8);
+		m_tunnel_open = true;
+		if (m_tunnel_allowed)
+			this->start_tunnel();
+	}
+	else
+	{
+		com_dbg.usart().set_speed(blo | (bhi << 8), dblspeed);
 	}
 }
 
 void app::close_tunnel()
 {
 	if (m_tunnel_open && m_tunnel_allowed)
-	{
-		com_tunnel.usart().close();
-		pin_txd::make_input();
-	}
-
+		this->stop_tunnel();
 	m_tunnel_open = false;
 }
 
 void app::allow_tunnel()
 {
 	if (!m_tunnel_allowed && m_tunnel_open)
-	{
-		pin_txd::make_high();
-		com_tunnel.usart().open(m_tunnel_baudctrl, /*rx_interrupt=*/true, /*synchronous=*/false, m_tunnel_dblspeed);
-	}
-
+		this->start_tunnel();
 	m_tunnel_allowed = true;
 }
 
 void app::disallow_tunnel()
 {
 	if (m_tunnel_allowed && m_tunnel_open)
-	{
-		com_tunnel.usart().close();
-		pin_txd::make_input();
-	}
-
+		this->stop_tunnel();
 	m_tunnel_allowed = false;
 }
 
