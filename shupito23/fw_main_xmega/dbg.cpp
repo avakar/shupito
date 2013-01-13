@@ -2,6 +2,7 @@
 #include "dbg.h"
 #include "utils.hpp"
 #include "led.hpp"
+#include "usb.h"
 
 void app::process_with_debug()
 {
@@ -27,6 +28,9 @@ void app::process_with_debug()
 			send(com_usb, "hiv: 0x");
 			send_hex(com_usb, hiv_get_voltage());
 			com_usb.write('\n');
+			break;
+		case 'p':
+			usb_tunnel_send_test_packet = true;
 			break;
 #if 0
 		case 'H':
@@ -61,14 +65,14 @@ void app::process_with_debug()
 			com_usb.write('\n');
 			// fallthrough
 		default:
-			send(com_usb, "?AbBvVhH1234\n");
+			send(com_usb, "?AbBvVphH1234\n");
 			break;
 #else
 		case '?':
 			send(com_usb, "Shupito 2.3\n");
 			// fallthrough
 		default:
-			send(com_usb, "?AbBvV\n");
+			send(com_usb, "?AbBvVp\n");
 			break;
 #endif
 		}

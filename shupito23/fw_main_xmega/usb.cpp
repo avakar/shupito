@@ -8,6 +8,7 @@
 
 com_usb_t com_usb;
 com_usb_tunnel_t com_usb_tunnel;
+bool usb_tunnel_send_test_packet = false;
 
 #include "usb_descriptors.h"
 
@@ -196,6 +197,14 @@ void usb_poll()
 		memcpy(com_usb.rx_buffer(), ep1_out_buf, ep_descs->ep1_out.CNT);
 		com_usb.rx_reset(ep_descs->ep1_out.CNT);
 		ep_descs->ep1_out.STATUS &= ~USB_EP_BUSNACK0_bm;
+	}
+
+	if ((ep_descs->ep3_in.STATUS & USB_EP_BUSNACK0_bm) && usb_tunnel_send_test_packet)
+	{
+		memset(ep3_in_buf, 'x', 64);
+		ep_descs->ep3_in.CNT = 64;
+		ep_descs->ep3_in.STATUS &= ~USB_EP_BUSNACK0_bm;
+		usb_tunnel_send_test_packet = false;
 	}
 
 	if ((ep_descs->ep3_in.STATUS & USB_EP_BUSNACK0_bm) && com_usb_tunnel.tx_size() != 0)
