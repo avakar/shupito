@@ -22,17 +22,15 @@ void app::process_with_debug()
 		case 'v':
 			send(com_usb, "vccio: 0x");
 			send_hex(com_usb, (uint16_t)m_vccio_voltage);
-			com_usb.write('\n');
-			break;
-		case 'V':
-			send(com_usb, "hiv: 0x");
+			send(com_usb, "\nhiv_voltage: 0x");
 			send_hex(com_usb, hiv_get_voltage());
+			send(com_usb, "\nhiv_period: 0x");
+			send_hex(com_usb, hiv_get_period());
 			com_usb.write('\n');
 			break;
 		case 'p':
 			usb_tunnel_send_test_packet = true;
 			break;
-#if 0
 		case 'H':
 			hiv_enable();
 			send(com_usb, "hiv_enable()\n");
@@ -51,30 +49,18 @@ void app::process_with_debug()
 			pin_rst::apply_hiv();
 			break;
 		case '4':
-			pin_rst::apply_hiv();
+			pin_rst::make_input();
 			break;
 		case ' ':
 			pin_rst::make_input();
 			hiv_disable();
 			break;
 		case '?':
-			send(com_usb, "Shupito 2.3\nhiv_voltage: ");
-			send_hex(com_usb, hiv_get_voltage());
-			send(com_usb, "\nhiv_period: ");
-			send_hex(com_usb, hiv_get_period());
-			com_usb.write('\n');
-			// fallthrough
-		default:
-			send(com_usb, "?AbBvVphH1234\n");
-			break;
-#else
-		case '?':
 			send(com_usb, "Shupito 2.3\n");
 			// fallthrough
 		default:
-			send(com_usb, "?AbBvVp\n");
+			send(com_usb, "?AbBvphH1234\n");
 			break;
-#endif
 		}
 	}
 }
