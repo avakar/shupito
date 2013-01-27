@@ -27,7 +27,7 @@ void hiv_init()
 	ADCA_CH1_MUXCTRL = ADC_CH_MUXPOS_PIN1_gc;
 
 	g_timeout.init(clock, clock_t::us<1000>::value);
-	g_setpoint_recip = 79796;
+	g_setpoint_recip = 0x1b7c6;
 	g_enabled = false;
 }
 
