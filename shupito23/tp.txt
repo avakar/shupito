@@ -1,0 +1,32 @@
+- blink led
+- 3.3V
+- 5V
+- vccio measurement should work
+- short protection
+- pdi stop
+- pdi read fuses
+- pdi read memory
+- pdi read eeprom
+- pdi write flash
+- pdi write eeprom
+- pdi chip erase
+- spi stop
+- spi read fuses
+- spi read flash
+- spi read eeprom
+- spi write flash
+- spi write eeprom
+- spi chip erase
+- sending data through the tunnel
+- sending data through bth tunnel
+- via .debug
+ - yellow rst pin should be floating
+ - 1 to pull the pin down (0V)
+ - 2 to apply vccio (3.3V)
+ - 3 to apply hiv (5V)
+ - H to enable the boost regulator (12V), 
+ - 4 to float the pin
+ - v to print the hiv period, should be around 0x1CC
+ - h to disable hiv
+ - B to start bootloader
+- VUSB should be at 5V
