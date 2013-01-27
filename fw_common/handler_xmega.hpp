@@ -33,15 +33,13 @@ public:
 				while (!pdi.tx_ready())
 					process();
 
-				typename clock_t::time_type t = clock.value();
-
 				uint8_t error = 0;
 
 				pdi_stcs(pdi, 0x01, 0x59); // Ensure RESET
-				pdi_ldcs(pdi, 1);
 
 				uint8_t reset = 0;
-				error = pdi_read(pdi, reset, clock, process);
+				pdi_ldcs(pdi, 1, &reset);
+				error = pdi_wait_read(pdi, clock, process);
 				if (!error && (reset & 1) == 0)
 					error = 5;
 
@@ -49,10 +47,11 @@ public:
 					pdi_key(pdi, 0x1289AB45CDD888FFull);
 
 				uint8_t pdi_status = 0;
-				while (!error && (pdi_status & 0x02) == 0 && clock.value() - t < Clock::template us<100000>::value)
+				typename clock_t::time_type t = clock.value();
+				while (!error && (pdi_status & 0x02) == 0 && clock.value() - t < Clock::template us<20000>::value)
 				{
-					pdi_ldcs(pdi, 0);
-					error = pdi_read(pdi, pdi_status, clock, process);
+					pdi_ldcs(pdi, 0, &pdi_status);
+					error = pdi_wait_read(pdi, clock, process);
 				}
 
 				if (!error && (pdi_status & 0x02) == 0)
@@ -81,20 +80,10 @@ public:
 		case 3:
 			{
 				// Read signature
-				pdi_sts(pdi, (uint8_t)0x010001CA, (uint8_t)0x43);
-				pdi_lds(pdi, (uint32_t)0x01000090, 4);
-
 				uint8_t buf[5];
-				uint8_t error = 0;
+				pdi_lds(pdi, (uint32_t)0x01000090, 4, buf);
 
-				for (uint8_t i = 0; i != 4; ++i)
-				{
-					uint8_t v = 0;
-					if (!error)
-						error = pdi_read(pdi, v, clock, process);
-					buf[i] = v;
-				}
-
+				uint8_t error = pdi_wait_read(pdi, clock, process);
 				if (error)
 					pdi.clear();
 				buf[4] = error;
@@ -126,15 +115,8 @@ public:
 							chunk = 0;
 
 						uint8_t * wbuf = w.alloc_sync(4, chunk);
-						pdi_rep_ld(pdi, chunk);
-						for (uint8_t i = chunk; i != 0; --i, ++addr)
-						{
-							uint8_t v = 0;
-							if (error == 0)
-								error = pdi_read(pdi, v, clock, process);
-							*wbuf++ = v;
-							process();
-						}
+						pdi_rep_ld(pdi, chunk, wbuf);
+						error = pdi_wait_read(pdi, clock, process);
 						w.commit();
 
 						len -= chunk;

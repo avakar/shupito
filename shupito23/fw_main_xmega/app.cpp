@@ -89,6 +89,11 @@ void app::init()
 	pin_txd::init();
 	pin_aux_rst::init();
 	pin_pdi::init();
+	
+	pin_pdi_rx::pullup();
+
+	pin_dbg_0::make_low();
+	pin_dbg_1::make_low();
 
 	clock_t::init();
 

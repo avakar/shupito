@@ -4,37 +4,34 @@
 #include <stdint.h>
 
 template <typename Pdi, typename T>
-void pdi_lds(Pdi & pdi, T addr, uint8_t rx_count)
+void pdi_lds(Pdi & pdi, T addr, uint8_t rx_count, uint8_t * buf)
 {
 	pdi.write(0x00 | ((sizeof addr - 1) << 2) | (rx_count - 1));
+	
+	uint8_t const * addr_ptr = reinterpret_cast<uint8_t const *>(&addr);
 	for (uint8_t i = 1; i != sizeof addr; ++i)
-	{
-		pdi.write((uint8_t)addr);
-		addr >>= 8;
-	}
-	pdi.write((uint8_t)addr, rx_count);
+		pdi.write(*addr_ptr++);
+	pdi.write(*addr_ptr, rx_count, buf);
 }
 
 template <typename R, typename Pdi, typename T>
 void pdi_sts(Pdi & pdi, T addr, R data)
 {
 	pdi.write(0x40 | ((sizeof addr - 1) << 2) | (sizeof data - 1));
+
+	uint8_t const * addr_ptr = reinterpret_cast<uint8_t const *>(&addr);
 	for (uint8_t i = 0; i != sizeof addr; ++i)
-	{
-		pdi.write((uint8_t)addr);
-		addr >>= 8;
-	}
+		pdi.write(*addr_ptr++);
+
+	uint8_t const * data_ptr = reinterpret_cast<uint8_t const *>(&data);
 	for (uint8_t i = 0; i != sizeof data; ++i)
-	{
-		pdi.write((uint8_t)data);
-		data >>= 8;
-	}
+		pdi.write(*data_ptr++);
 }
 
 template <typename Pdi>
-void pdi_ldcs(Pdi & pdi, uint8_t addr)
+void pdi_ldcs(Pdi & pdi, uint8_t addr, uint8_t * buf)
 {
-	pdi.write(0x80 | addr, 1);
+	pdi.write(0x80 | addr, 1, buf);
 }
 
 template <typename Pdi>
@@ -48,22 +45,20 @@ template <typename Pdi>
 void pdi_key(Pdi & pdi, uint64_t key)
 {
 	pdi.write(0xe0);
+	
+	uint8_t const * ptr = reinterpret_cast<uint8_t const *>(&key);
 	for (uint8_t i = 0; i != 8; ++i)
-	{
-		pdi.write(key);
-		key >>= 8;
-	}
+		pdi.write(*ptr++);
 }
 
 template <typename Pdi, typename T>
 void pdi_st_ptr(Pdi & pdi, T addr)
 {
 	pdi.write(0x68 | (sizeof addr - 1));
+
+	uint8_t const * addr_ptr = reinterpret_cast<uint8_t const *>(&addr);
 	for (uint8_t i = 0; i != sizeof addr; ++i)
-	{
-		pdi.write(addr);
-		addr >>= 8;
-	}	
+		pdi.write(*addr_ptr++);
 }
 
 template <typename Pdi>
@@ -79,14 +74,14 @@ void pdi_ld(Pdi & pdi)
 }
 
 template <typename Pdi>
-void pdi_rep_ld(Pdi & pdi, uint8_t count)
+void pdi_rep_ld(Pdi & pdi, uint8_t count, uint8_t * buf)
 {
 	if (count)
 	{
 		// REPEAT count-1; LD byte, *ptr++
 		pdi.write(0xa0);
 		pdi.write(count-1);
-		pdi.write(0x24, count);
+		pdi.write(0x24, count, buf);
 	}
 }
 
@@ -94,54 +89,41 @@ template <typename Pdi, typename T>
 void pdi_st(Pdi & pdi, T t)
 {
 	pdi.write(0x64 | (sizeof t - 1));
+	
+	uint8_t const * ptr = reinterpret_cast<uint8_t const *>(&t);
 	for (uint8_t i = 0; i != sizeof t; ++i)
-	{
-		pdi.write(t);
-		t >>= 8;
-	}	
+		pdi.write(*ptr++);
 }
 
 template <typename Pdi, typename T>
 void pdi_repeat(Pdi & pdi, T count)
 {
 	pdi.write(0xa0 | (sizeof count - 1));
+
+	uint8_t const * count_ptr = reinterpret_cast<uint8_t const *>(&count_ptr);
 	for (uint8_t i = 0; i != sizeof count; ++i)
-	{
-		pdi.write(count);
-		count >>= 8;
-	}	
+		pdi.write(*count_ptr++);
 }
 
-/*
-template <typename Pdi, typename T, typename U>
-void pdi_ld_range(Pdi & pdi, T addr, U count)
+template <typename Pdi, typename Clock, typename Process>
+uint8_t pdi_wait_read(Pdi & pdi, Clock & clock, Process const & process)
 {
-	pdi_repeat(pdi, count - 1);
-	pdi_st_ptr(pdi, addr);
-	pdi.write(0x24, count);
-}
-*/
-
-template <typename R, typename Pdi, typename Clock, typename Process>
-uint8_t pdi_read(Pdi & pdi, R & r, Clock & clock, Process const & process)
-{
-	r = 0;
-
 	typename Clock::time_type t = clock.value();
 
-	for (uint8_t i = 0; i != sizeof(R); ++i)
+	uint8_t r = pdi.read_count();
+	while (r)
 	{
-		while (!pdi.rx_ready())
+		uint8_t new_r = pdi.read_count();
+		if (new_r != r)
 		{
-			if (clock.value() - t > Clock::template us<16000>::value)
-			{
-				return 1;
-			}
-			process();
+			t = clock.value();
+			r = new_r;
+			continue;
 		}
 
-		r <<= 8;
-		r |= pdi.read();
+		if (clock.value() - t > Clock::template us<20000>::value)
+			return 1;
+		process();
 	}
 
 	return 0;
@@ -154,10 +136,10 @@ uint8_t pdi_wait_nvm_busy(Pdi & pdi, Clock & clock, typename Clock::time_type ti
 
 	for (;;)
 	{
-		pdi_lds(pdi, (uint32_t)0x010001CF, 1);
-
 		uint8_t status;
-		uint8_t error = pdi_read(pdi, status, clock, process);
+		pdi_lds(pdi, (uint32_t)0x010001CF, 1, &status);
+
+		uint8_t error = pdi_wait_read(pdi, clock, process);
 		if (error)
 			return error;
 		if ((status & 0x80) == 0)
@@ -172,24 +154,14 @@ template <typename Pdi, typename Clock, typename Process>
 uint8_t pdi_ptrcopy(Pdi & pdi, uint8_t * wbuf, uint32_t addr, uint8_t len, Clock & clock, Process const & process)
 {
 	uint8_t error = 0;
-	while (len > 0)
+	while (!error && len > 0)
 	{
 		uint8_t chunk = len > 14? 14: len;
 
-		if (!error)
-		{
-			pdi_st_ptr(pdi, addr);
-			pdi_repeat(pdi, (uint8_t)(chunk - 1));
-			pdi.write(0x24, chunk);
-		}
-
-		for (uint8_t i = 0; i != chunk; ++i)
-		{
-			uint8_t v = 0;
-			if (!error)
-				error = pdi_read(pdi, v, clock, process);
-			*wbuf++ = v;
-		}
+		pdi_st_ptr(pdi, addr);
+		pdi_repeat(pdi, (uint8_t)(chunk - 1));
+		pdi.write(0x24, chunk, wbuf);
+		error = pdi_wait_read(pdi, clock, process);
 
 		addr += chunk;
 		len -= chunk;

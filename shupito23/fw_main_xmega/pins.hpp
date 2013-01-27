@@ -15,11 +15,15 @@ AVRLIB_DEFINE_XMEGA_PIN(pin_sup_5v0,   PORTB, 0);
 AVRLIB_DEFINE_XMEGA_PIN(pin_aux_rstd,  PORTD, 0);
 AVRLIB_DEFINE_XMEGA_PIN(pin_aux_rstv,  PORTC, 1);
 AVRLIB_DEFINE_XMEGA_PIN(pin_pdid,      PORTD, 1);
+AVRLIB_DEFINE_XMEGA_PIN(pin_pdi_rx,    PORTC, 2);
 AVRLIB_DEFINE_XMEGA_PIN(pin_pdiv,      PORTC, 3);
 AVRLIB_DEFINE_XMEGA_PIN(pin_xckv,      PORTC, 5);
 AVRLIB_DEFINE_XMEGA_PIN(pin_rxd,       PORTC, 6);
 AVRLIB_DEFINE_XMEGA_PIN(pin_txdv,      PORTC, 7);
 AVRLIB_DEFINE_XMEGA_PIN(pin_txdd,      PORTD, 2);
+
+AVRLIB_DEFINE_XMEGA_PIN(pin_dbg_0,     PORTD, 4);
+AVRLIB_DEFINE_XMEGA_PIN(pin_dbg_1,     PORTD, 5);
 
 struct pin_rst
 {

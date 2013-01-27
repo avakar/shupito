@@ -32,8 +32,8 @@ public:
 	{
 		if (bsel)
 			--bsel;
-		USARTC0.BAUDCTRLA = bsel;
-		USARTC0.BAUDCTRLB = bsel >> 8;
+		USARTC0_BAUDCTRLA = bsel;
+		USARTC0_BAUDCTRLB = bsel >> 8;
 
 		if (m_state != st_disabled)
 			return;
@@ -47,6 +47,9 @@ public:
 		// might be a prelude to debugging).
 		PdiClk::make_low();
 
+		// We can be sure the PDI line was low before this -- there
+		// must be no pull-ups on the line in order for the
+		// chip's buskeeper to properly transmit.
 		PdiData::make_high();
 		m_state = st_rst_disable;
 
@@ -63,31 +66,41 @@ public:
 		return m_tx_buffer.empty();
 	}
 
-	bool rx_ready() const
+	void write(uint8_t data)
 	{
-		return !m_rx_buffer.empty();
+		this->write(data, 0, 0);
 	}
 
-	void write(uint8_t data, uint8_t rx_count = 0)
+	void write(uint8_t data, uint8_t rx_count, uint8_t * rx_buf)
 	{
 		while (!this->tx_ready())
 			this->process();
 
-		USARTC0.CTRLA = 0;
-		m_tx_buffer.push(data);
+		USARTC0_CTRLA = 0;
 		m_rx_count = rx_count;
+		m_rx_buf = rx_buf;
 		m_state = st_busy;
-		USARTC0.CTRLA = USART_DREINTLVL_MED_gc;
+		
+		// Attempt to push the data into the data register if it's free,
+		// thus avoiding the overhead of an interrupt.
+		if ((USARTC0_STATUS & USART_DREIF_bm) != 0 && m_tx_buffer.empty())
+		{
+			cli();
+			USARTC0_DATA = data;
+			USARTC0_STATUS = USART_TXCIF_bm;
+			sei();
+			USARTC0_CTRLA = USART_TXCINTLVL_HI_gc;
+		}
+		else
+		{
+			m_tx_buffer.push(data);
+			USARTC0_CTRLA = USART_DREINTLVL_MED_gc;
+		}
 	}
-
-	uint8_t read()
+	
+	uint8_t read_count() const
 	{
-		while (!this->rx_ready())
-			this->process();
-
-		uint8_t res = m_rx_buffer.top();
-		m_rx_buffer.pop();
-		return res;
+		return m_rx_count;
 	}
 
 	void cancel_read()
@@ -100,12 +113,11 @@ public:
 	{
 		if (m_state == st_busy)
 		{
-			USARTC0.CTRLA = 0;
-			USARTC0.CTRLB = USART_TXEN_bm;
+			USARTC0_CTRLA = 0;
+			USARTC0_CTRLB = USART_TXEN_bm;
 			PdiData::make_output();
 			m_rx_count = 0;
 			m_tx_buffer.clear();
-			m_rx_buffer.clear();
 			m_state = st_idle;
 		}
 	}
@@ -120,10 +132,10 @@ public:
 		case st_rst_disable:
 			if (m_clock.value() - m_time_base > Clock::template us<8>::value)
 			{
-				USARTC0.CTRLC = USART_CMODE_SYNCHRONOUS_gc | USART_PMODE_EVEN_gc | USART_SBMODE_bm
+				USARTC0_CTRLC = USART_CMODE_SYNCHRONOUS_gc | USART_PMODE_EVEN_gc | USART_SBMODE_bm
 					| USART_CHSIZE_8BIT_gc;
-				USARTC0.CTRLA = 0;
-				USARTC0.CTRLB = USART_TXEN_bm;
+				USARTC0_CTRLA = 0;
+				USARTC0_CTRLB = USART_TXEN_bm;
 
 				m_state = st_wait_ticks;
 				m_time_base = m_clock.value();
@@ -159,9 +171,9 @@ public:
 				PdiData::make_input();
 				PdiClk::make_noninverted();
 
-				USARTC0.CTRLA = 0;
-				USARTC0.CTRLB = 0;
-				USARTC0.CTRLC = 0;
+				USARTC0_CTRLA = 0;
+				USARTC0_CTRLB = 0;
+				USARTC0_CTRLC = 0;
 
 				m_state = st_disabled;
 			}
@@ -176,11 +188,11 @@ public:
 
 	void intr_rxc()
 	{
-		m_rx_buffer.push(USARTC0.DATA);
+		*m_rx_buf++ = USARTC0_DATA;
 		if (--m_rx_count == 0)
 		{
-			USARTC0.CTRLA = 0;
-			USARTC0.CTRLB = USART_TXEN_bm;
+			USARTC0_CTRLA = 0;
+			USARTC0_CTRLB = USART_TXEN_bm;
 			PdiData::make_output();
 			m_state = st_rx_done;
 		}
@@ -191,14 +203,14 @@ public:
 		AVRLIB_ASSERT(!m_tx_buffer.empty());
 
 		cli();
-		USARTC0.DATA = m_tx_buffer.top();
-		USARTC0.STATUS = USART_TXCIF_bm;
+		USARTC0_DATA = m_tx_buffer.top();
+		USARTC0_STATUS = USART_TXCIF_bm;
 		sei();
 
 		m_tx_buffer.pop();
 		if (m_tx_buffer.empty())
 		{
-			USARTC0.CTRLA = USART_TXCINTLVL_HI_gc;
+			USARTC0_CTRLA = USART_TXCINTLVL_HI_gc;
 		}
 	}
 	
@@ -208,14 +220,20 @@ public:
 
 		if (m_rx_count)
 		{
+			// We must disable TX and only then enable RX
+			// Apparently, the clock is not reset if these
+			// actions occur simultaneously and the receiver will
+			// read a spurious byte if it is enabled near
+			// the sampling edge.
+			USARTC0_CTRLB = 0;
 			PdiData::make_input();
-			USARTC0.CTRLB = USART_RXEN_bm;
-			USARTC0.CTRLA = USART_RXCINTLVL_MED_gc;
+			USARTC0_CTRLB = USART_RXEN_bm;
+			USARTC0_CTRLA = USART_RXCINTLVL_MED_gc;
 		}
 		else
 		{
 			m_state = st_idle;
-			USARTC0.CTRLA = 0;
+			USARTC0_CTRLA = 0;
 		}
 	}
 
@@ -224,9 +242,9 @@ public:
 private:
 	Clock & m_clock;
 	typename Clock::time_type m_time_base;
-	avrlib::buffer<uint8_t, 16> m_rx_buffer;
 	avrlib::buffer<uint8_t, 16> m_tx_buffer;
 	volatile uint8_t m_rx_count;
+	volatile uint8_t * m_rx_buf;
 	Led m_led;
 
 	enum { st_disabled, st_rst_disable, st_wait_ticks, st_idle, st_rx_done, st_rx_done_wait, st_busy, st_unrst } volatile m_state;
