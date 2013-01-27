@@ -68,10 +68,10 @@
 <wire x1="0" y1="23.8025" x2="0" y2="0.3175" width="0" layer="20"/>
 <text x="40.005" y="19.685" size="1.016" layer="1" font="vector" ratio="20" rot="SR270" align="bottom-center">shupito</text>
 <text x="38.1" y="19.685" size="1.27" layer="1" font="vector" ratio="16" rot="SR270" align="bottom-center">2.3</text>
-<text x="1.5875" y="19.685" size="1.6764" layer="101" align="center-left">RST / VPP (12V)</text>
+<text x="1.5875" y="19.685" size="1.6764" layer="101" align="center-left">RST</text>
 <text x="1.5875" y="17.145" size="1.6764" layer="101" align="center-left">VCCIO</text>
 <text x="1.5875" y="14.605" size="1.6764" layer="101" align="center-left">GND</text>
-<text x="1.5875" y="9.525" size="1.6764" layer="101" align="center-left">RST</text>
+<text x="1.5875" y="9.525" size="1.6764" layer="101" align="center-left">CLK</text>
 <text x="1.5875" y="6.985" size="1.6764" layer="101" align="center-left">SCK</text>
 <text x="1.5875" y="4.445" size="1.6764" layer="101" align="center-left">MISO</text>
 <text x="1.5875" y="1.905" size="1.6764" layer="101" align="center-left">MOSI</text>
@@ -102,6 +102,7 @@
 <text x="34.6075" y="1.905" size="1.6764" layer="101" align="center-left"> 3.3V</text>
 <text x="1.5875" y="22.225" size="1.6764" layer="101" align="center-left">VUSB</text>
 <text x="1.5875" y="12.065" size="1.6764" layer="101" align="center-left">GND</text>
+<text x="8.255" y="19.685" size="1.6764" layer="101" align="center-left">/ VPP (12V)</text>
 </plain>
 <libraries>
 <library name="xmega">
