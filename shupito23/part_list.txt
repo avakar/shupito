@@ -1,102 +1,29 @@
-Partlist
-
-Exported from shupito.sch at 19.9.2012 21:25:41
-
-EAGLE Version 6.1.0 Copyright (c) 1988-2012 CadSoft
-
-Assembly variant: 
-
 Part     Value                      Device              Package                  Library        Sheet
 
-C1       100n                       C-EUC0603K          C0603K                   rcl            1
-C2       10n                        C-EUC0603K          C0603K                   rcl            1
-C3       2.2u-1759473               C-EUC0603K          C0603K                   rcl            1
-C4       10n                        C-EUC0603K          C0603K                   rcl            1
-C5       100n                       C-EUC0603K          C0603K                   rcl            1
-C6       2.2u                       C-EUC0603K          C0603K                   rcl            1
-C7       2.2u                       C-EUC0603K          C0603K                   rcl            1
-C8       10n                        C-EUC0603K          C0603K                   rcl            1
-C10      100n                       C-EUC0603K          C0603K                   rcl            1
-C11      10n                        C-EUC0603K          C0603K                   rcl            1
-C13      1u/25V-1759039             C-EUC0603K          C0603K                   rcl            1
-C16      100n                       C-EUC0603K          C0603K                   rcl            1
-D1       BAT42WS-1621831            DIODE-SOD323        SOD323                   diode          1
-D2       BAT42WS-1621831            DIODE-SOD323        SOD323                   diode          1
-IC2      74LVC1T45                  74LVC1T45DBV        SOT236                   74lvc1t45      1
-IC3      74LVC1T45                  74LVC1T45DBV        SOT236                   74lvc1t45      1
-IC4      74LVC1T45                  74LVC1T45DBV        SOT236                   74lvc1t45      1
-IC5      74LVC1T45                  74LVC1T45DBV        SOT236                   74lvc1t45      1
-IC6      ATXMEGA32A4U-AU            ATXMEGA32A4U-AU     TQFP44                   xmega          1
-IC7      TPS73033DBV                TPS73033DBV         SOT23-DBV                tps73033       1
-JP1      PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP2      PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP3      PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP4      PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP5      PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP6      PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP7      PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP8      PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP9      PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP10     PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP11     PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP12     PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP13     PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP14     PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP15     PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP16     PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP17     PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP18     PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP19     PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP20     PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP23     PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-JP24     PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
-L1       BEAD-1515707               R-US_R0603          R0603                    rcl            1
-L2       10uH-1463501, 22uH-1612131 R-US_R0805          R0805                    rcl            1
-LED1     ORANGE-8554552             LEDCHIPLED_0603     CHIPLED_0603             led            1
-Q1       BC807W-1907646             BC807W              SOT323-BEC               transistor-pnp 1
-Q2       NX2301P-1894738            P-MOSFET-SOT23-GSD  SOT23                    transistors    1
-Q3       BC807W-1907646             BC807W              SOT323-BEC               transistor-pnp 1
-Q4       PDTC123YU-1757992          NPN-BIAS-SOT323-BEC SOT323                   transistors    1
-Q5       PDTC123YU-1757992          NPN-BIAS-SOT323-BEC SOT323                   transistors    1
-Q6       DTA144-1680214             PNP-BIAS-SOT323-BEC SOT323                   transistors    1
-Q7       PDTC123YU-1757992          NPN-BIAS-SOT323-BEC SOT323                   transistors    1
-Q8       PDTC123YU-1757992          NPN-BIAS-SOT323-BEC SOT323                   transistors    1
-Q9       DTA144-1680214             PNP-BIAS-SOT323-BEC SOT323                   transistors    1
-Q10      1758094                    N-MOSFET-SOT323-GSD SOT323                   transistors    1
-Q11      PDTC123YU-1757992          NPN-BIAS-SOT323-BEC SOT323                   transistors    1
-R1       330                        R-EU_R0603          R0603                    rcl            1
-R2       6k8                        R-EU_R0603          R0603                    rcl            1
-R3       0                          R-EU_R1206          R1206                    rcl            1
-R4       0                          R-EU_R1206          R1206                    rcl            1
-R5       330                        R-EU_R0603          R0603                    rcl            1
-R6       330                        R-EU_R0603          R0603                    rcl            1
-R7       6k8 1%                     R-EU_R0603          R0603                    rcl            1
-R8       470k                       R-EU_R0603          R0603                    rcl            1
-R9       470k                       R-EU_R0603          R0603                    rcl            1
-R10      470k                       R-EU_R0603          R0603                    rcl            1
-R11      1k5 1%                     R-EU_R0603          R0603                    rcl            1
-R12      6k8 1%                     R-EU_R0603          R0603                    rcl            1
-R13      22k 1%                     R-EU_R0603          R0603                    rcl            1
-R14      1k5 1%                     R-EU_R0603          R0603                    rcl            1
-R16      47                         R-EU_R0603          R0603                    rcl            1
-R17      330                        R-EU_R0603          R0603                    rcl            1
-R18      330                        R-EU_R0603          R0603                    rcl            1
-R19      330                        R-EU_R0603          R0603                    rcl            1
-R20      330                        R-EU_R0603          R0603                    rcl            1
-R21      330                        R-EU_R0603          R0603                    rcl            1
-R22      330                        R-EU_R0603          R0603                    rcl            1
-R23      330                        R-EU_R0603          R0603                    rcl            1
-R24      330                        R-EU_R0603          R0603                    rcl            1
-R26      470k                       R-EU_R0603          R0603                    rcl            1
-R27      470k                       R-EU_R0603          R0603                    rcl            1
-R28      470k                       R-EU_R0603          R0603                    rcl            1
-R29      470k                       R-EU_R0603          R0603                    rcl            1
-R30      6k8 1%                     R-EU_R0603          R0603                    rcl            1
-S1       KSS241G                    KSS241G             KSS-G                    switch         1
-TP1      TPTP15SQ                   TPTP15SQ            TP15SQ                   testpad        1
-TP2      TPTP15SQ                   TPTP15SQ            TP15SQ                   testpad        1
-TP3      TPTP15SQ                   TPTP15SQ            TP15SQ                   testpad        1
-TP4      TPTP15SQ                   TPTP15SQ            TP15SQ                   testpad        1
-TP5      TPTP15SQ                   TPTP15SQ            TP15SQ                   testpad        1
-TP6      TPTP15SQ                   TPTP15SQ            TP15SQ                   testpad        1
-X2       USB-MICRO-B-BOTTOM         USB-MICRO-B-BOTTOM  USB-MICRO-B-BOTTOM-MOLEX usb            1
+ 4       100n                       C-EUC0603K          C0603K                   rcl            1
+ 4       10n                        C-EUC0603K          C0603K                   rcl            1
+ 3       2.2u-1759473               C-EUC0603K          C0603K                   rcl            1
+ 1       1u/25V-1759039             C-EUC0603K          C0603K                   rcl            1
+ 2       BAT42WS-1621831            DIODE-SOD323        SOD323                   diode          1
+ 4       74LVC1T45                  74LVC1T45DBV        SOT236                   74lvc1t45      1
+ 1       ATXMEGA32A4U-AU            ATXMEGA32A4U-AU     TQFP44                   xmega          1
+ 1       TPS73033DBV                TPS73033DBV         SOT23-DBV                tps73033       1
+ 1       BEAD-1515707               R-US_R0603          R0603                    rcl            1
+ 1       10uH-1463501, 22uH-1612131 R-US_R0805          R0805                    rcl            1
+ 1       ORANGE-8554552             LEDCHIPLED_0603     CHIPLED_0603             led            1
+ 2       BC807W-1907646             BC807W              SOT323-BEC               transistor-pnp 1
+ 1       NX2301P-1894738            P-MOSFET-SOT23-GSD  SOT23                    transistors    1
+ 5       PDTC123YU-1757992          NPN-BIAS-SOT323-BEC SOT323                   transistors    1
+ 2       PDTA114TU-8736731          PNP-BIAS-SOT323-BEC SOT323                   transistors    1
+ 1       PMF280UN,115-1758094       N-MOSFET-SOT323-GSD SOT323                   transistors    1
+11       330                        R-EU_R0603          R0603                    rcl            1
+ 2       0                          R-EU_R1206          R1206                    rcl            1
+ 4       6k8 1%                     R-EU_R0603          R0603                    rcl            1
+ 7       470k                       R-EU_R0603          R0603                    rcl            1
+ 2       1k5 1%                     R-EU_R0603          R0603                    rcl            1
+ 1       22k 1%                     R-EU_R0603          R0603                    rcl            1
+ 1       47                         R-EU_R0603          R0603                    rcl            1
+ 1       KSS241G                    KSS241G             KSS-G                    switch         1
+ 1       USB-MICRO-B-BOTTOM         USB-MICRO-B-BOTTOM  USB-MICRO-B-BOTTOM-MOLEX usb            1
+
+22       PINH1X01SMD                PINH1X01SMD         PINH1X01SMD              pinhead_smd    1
