@@ -116,7 +116,7 @@ void app::init()
 	NVM_CMD = NVM_CMD_NO_OPERATION_gc;
 
 	// Disable unused peripherals to decrease power consumption and noise
-	PR_PRGEN = PR_AES_bm | PR_EBI_bm | PR_RTC_bm | PR_EVSYS_bm | PR_DMA_bm;
+	PR_PRGEN = PR_AES_bm | PR_EBI_bm | PR_RTC_bm | PR_EVSYS_bm;
 	PR_PRPA = PR_DAC_bm | PR_AC_bm;
 	PR_PRPB = PR_DAC_bm | PR_AC_bm;
 	PR_PRPC = PR_TWI_bm | PR_HIRES_bm;
@@ -276,9 +276,6 @@ void app::run()
 
 	if (m_handler)
 		m_handler->process_selected();
-
-	while (!com_usb_tunnel.empty() && com_tunnel.tx_ready())
-		com_tunnel.write(com_usb_tunnel.read());
 
 	while (!com_tunnel.empty() && com_usb_tunnel.tx_ready())
 		com_usb_tunnel.write(com_tunnel.read());
@@ -464,7 +461,6 @@ void process_t::operator()() const
 	pdi.process();
 	usb_poll();
 	com_dbg.process_tx();
-	com_tunnel.process_tx();
 }
 
 void process_with_debug_t::operator()() const

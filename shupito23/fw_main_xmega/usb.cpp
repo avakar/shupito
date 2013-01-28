@@ -141,6 +141,45 @@ static bool set_config(uint8_t config)
 	return true;
 }
 
+static enum { uts_idle, uts_dma } g_usb_tunnel_state = uts_idle;
+
+static void usb_tunnel_init()
+{
+	g_usb_tunnel_state = uts_idle;
+
+	DMA_CTRL = DMA_ENABLE_bm;
+
+	// Setup the DMA channel to transfer from the USB EP3OUT to the USART C1
+	// data register whenever the register becomes ready
+	DMA_CH0_DESTADDR0 = (uint8_t)(uint16_t)&USARTC1_DATA;
+	DMA_CH0_DESTADDR1 = (uint16_t)&USARTC1_DATA >> 8;
+	DMA_CH0_DESTADDR2 = 0;
+
+	DMA_CH0_SRCADDR0 = (uint8_t)(uint16_t)ep3_out_buf;
+	DMA_CH0_SRCADDR1 = (uint16_t)ep3_out_buf >> 8;
+	DMA_CH0_SRCADDR2 = 0;
+
+	DMA_CH0_ADDRCTRL = DMA_CH_SRCRELOAD_BLOCK_gc | DMA_CH_SRCDIR_INC_gc | DMA_CH_DESTRELOAD_NONE_gc | DMA_CH_DESTDIR_FIXED_gc;
+	DMA_CH0_TRIGSRC = DMA_CH_TRIGSRC_USARTC1_DRE_gc;
+}
+
+static void usb_tunnel_poll()
+{
+	if ((ep_descs->ep3_out.STATUS & USB_EP_BUSNACK0_bm) && g_usb_tunnel_state == uts_idle)
+	{
+		g_usb_tunnel_state = uts_dma;
+		DMA_CH0_TRFCNT = ep_descs->ep3_out.CNT;
+		DMA_CH0_CTRLB = DMA_CH_TRNIF_bm;
+		DMA_CH0_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+	}
+
+	if (g_usb_tunnel_state == uts_dma && (DMA_CH0_CTRLB & DMA_CH_TRNIF_bm))
+	{
+		g_usb_tunnel_state = uts_idle;
+		ep_descs->ep3_out.STATUS &= ~USB_EP_BUSNACK0_bm;
+	}
+}
+
 void usb_init(char const * sn, uint8_t snlen)
 {
 	usb_sn = sn;
@@ -170,6 +209,8 @@ void usb_init(char const * sn, uint8_t snlen)
 	USB_CTRLA = USB_ENABLE_bm | USB_SPEED_bm | (0 << USB_MAXEP_gp);
 	USB_EPPTR = (uint16_t)ep_descs;
 	USB_CTRLB = USB_ATTACH_bm;
+
+	usb_tunnel_init();
 }
 
 static void prepare_send_buffer_packet(buffer_addrs_t & addrs)
@@ -198,57 +239,55 @@ void usb_poll()
 		return;
 	}
 
-	if ((ep_descs->ep1_in.STATUS & USB_EP_BUSNACK0_bm) && com_usb.tx_size() != 0)
+	if (usb_config)
 	{
-		memcpy(ep1_in_buf, com_usb.tx_buffer(), com_usb.tx_size());
-		ep_descs->ep1_in.CNT = com_usb.tx_size();
-		ep_descs->ep1_in.STATUS &= ~USB_EP_BUSNACK0_bm;
-		com_usb.tx_clear();
-	}
+		if ((ep_descs->ep1_in.STATUS & USB_EP_BUSNACK0_bm) && com_usb.tx_size() != 0)
+		{
+			memcpy(ep1_in_buf, com_usb.tx_buffer(), com_usb.tx_size());
+			ep_descs->ep1_in.CNT = com_usb.tx_size();
+			ep_descs->ep1_in.STATUS &= ~USB_EP_BUSNACK0_bm;
+			com_usb.tx_clear();
+		}
 
-	if ((ep_descs->ep1_out.STATUS & USB_EP_BUSNACK0_bm) && com_usb.rx_size() == 0)
-	{
-		memcpy(com_usb.rx_buffer(), ep1_out_buf, ep_descs->ep1_out.CNT);
-		com_usb.rx_reset(ep_descs->ep1_out.CNT);
-		ep_descs->ep1_out.STATUS &= ~USB_EP_BUSNACK0_bm;
-	}
+		if ((ep_descs->ep1_out.STATUS & USB_EP_BUSNACK0_bm) && com_usb.rx_size() == 0)
+		{
+			memcpy(com_usb.rx_buffer(), ep1_out_buf, ep_descs->ep1_out.CNT);
+			com_usb.rx_reset(ep_descs->ep1_out.CNT);
+			ep_descs->ep1_out.STATUS &= ~USB_EP_BUSNACK0_bm;
+		}
 
-	if ((ep_descs->ep3_in.STATUS & USB_EP_BUSNACK0_bm) && usb_tunnel_send_test_packet)
-	{
-		memset(ep3_in_buf, 'x', 64);
-		ep_descs->ep3_in.CNT = 64;
-		ep_descs->ep3_in.STATUS &= ~USB_EP_BUSNACK0_bm;
-		usb_tunnel_send_test_packet = false;
-	}
+		if ((ep_descs->ep3_in.STATUS & USB_EP_BUSNACK0_bm) && usb_tunnel_send_test_packet)
+		{
+			memset(ep3_in_buf, 'x', 64);
+			ep_descs->ep3_in.CNT = 64;
+			ep_descs->ep3_in.STATUS &= ~USB_EP_BUSNACK0_bm;
+			usb_tunnel_send_test_packet = false;
+		}
 
-	if ((ep_descs->ep3_in.STATUS & USB_EP_BUSNACK0_bm) && com_usb_tunnel.tx_size() != 0)
-	{
-		memcpy(ep3_in_buf, com_usb_tunnel.tx_buffer(), com_usb_tunnel.tx_size());
-		ep_descs->ep3_in.CNT = com_usb_tunnel.tx_size();
-		ep_descs->ep3_in.STATUS &= ~USB_EP_BUSNACK0_bm;
-		com_usb_tunnel.tx_clear();
-	}
+		if ((ep_descs->ep3_in.STATUS & USB_EP_BUSNACK0_bm) && com_usb_tunnel.tx_size() != 0)
+		{
+			memcpy(ep3_in_buf, com_usb_tunnel.tx_buffer(), com_usb_tunnel.tx_size());
+			ep_descs->ep3_in.CNT = com_usb_tunnel.tx_size();
+			ep_descs->ep3_in.STATUS &= ~USB_EP_BUSNACK0_bm;
+			com_usb_tunnel.tx_clear();
+		}
 
-	if ((ep_descs->ep3_out.STATUS & USB_EP_BUSNACK0_bm) && com_usb_tunnel.rx_size() == 0)
-	{
-		memcpy(com_usb_tunnel.rx_buffer(), ep3_out_buf, ep_descs->ep3_out.CNT);
-		com_usb_tunnel.rx_reset(ep_descs->ep3_out.CNT);
-		ep_descs->ep3_out.STATUS &= ~USB_EP_BUSNACK0_bm;
-	}
+		usb_tunnel_poll();
 
-	if ((ep_descs->ep4_in.STATUS & USB_EP_BUSNACK0_bm) && com_usb_tunnel2.tx_size() != 0)
-	{
-		memcpy(ep4_in_buf, com_usb_tunnel2.tx_buffer(), com_usb_tunnel2.tx_size());
-		ep_descs->ep4_in.CNT = com_usb_tunnel2.tx_size();
-		ep_descs->ep4_in.STATUS &= ~USB_EP_BUSNACK0_bm;
-		com_usb_tunnel2.tx_clear();
-	}
+		if ((ep_descs->ep4_in.STATUS & USB_EP_BUSNACK0_bm) && com_usb_tunnel2.tx_size() != 0)
+		{
+			memcpy(ep4_in_buf, com_usb_tunnel2.tx_buffer(), com_usb_tunnel2.tx_size());
+			ep_descs->ep4_in.CNT = com_usb_tunnel2.tx_size();
+			ep_descs->ep4_in.STATUS &= ~USB_EP_BUSNACK0_bm;
+			com_usb_tunnel2.tx_clear();
+		}
 
-	if ((ep_descs->ep4_out.STATUS & USB_EP_BUSNACK0_bm) && com_usb_tunnel2.rx_size() == 0)
-	{
-		memcpy(com_usb_tunnel2.rx_buffer(), ep4_out_buf, ep_descs->ep4_out.CNT);
-		com_usb_tunnel2.rx_reset(ep_descs->ep4_out.CNT);
-		ep_descs->ep4_out.STATUS &= ~USB_EP_BUSNACK0_bm;
+		if ((ep_descs->ep4_out.STATUS & USB_EP_BUSNACK0_bm) && com_usb_tunnel2.rx_size() == 0)
+		{
+			memcpy(com_usb_tunnel2.rx_buffer(), ep4_out_buf, ep_descs->ep4_out.CNT);
+			com_usb_tunnel2.rx_reset(ep_descs->ep4_out.CNT);
+			ep_descs->ep4_out.STATUS &= ~USB_EP_BUSNACK0_bm;
+		}
 	}
 
 	if (ep_descs->ep0_in.STATUS & USB_EP_TRNCOMPL0_bm)
