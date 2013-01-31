@@ -48,9 +48,6 @@ struct process_with_debug_t
 extern process_t g_process;
 extern process_with_debug_t g_process_with_debug;
 
-typedef avrlib::async_usart<avrlib::usart_xc1, 64, 64> com_tunnel_t;
-extern com_tunnel_t com_tunnel;
-
 class usb_yb_writer
 	: public yb_writer
 {
@@ -85,9 +82,6 @@ public:
 
 	void allow_tunnel();
 	void disallow_tunnel();
-
-	void start_tunnel();
-	void stop_tunnel();
 
 private:
 	char m_usb_sn[2*sn_calib_indexes_count];

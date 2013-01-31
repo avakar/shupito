@@ -7,9 +7,6 @@
 
 app g_app;
 
-com_tunnel_t com_tunnel;
-ISR(USARTC1_RXC_vect) { com_tunnel.intr_rx(); }
-
 process_t g_process;
 process_with_debug_t g_process_with_debug;
 
@@ -277,9 +274,6 @@ void app::run()
 	if (m_handler)
 		m_handler->process_selected();
 
-	while (!com_tunnel.empty() && com_usb_tunnel.tx_ready())
-		com_usb_tunnel.write(com_tunnel.read());
-
 	while (!com_usb_tunnel2.empty() && com_dbg.tx_ready())
 		com_dbg.write(com_usb_tunnel2.read());
 
@@ -373,20 +367,6 @@ uint8_t app::select_handler(handler_base * new_handler)
 }
 
 #include "baudctrls.h"
-
-void app::start_tunnel()
-{
-	com_tunnel.usart().close();
-	pin_txd::make_high();
-	com_tunnel.usart().open(m_tunnel_baudctrl, /*rx_interrupt=*/true, /*synchronous=*/false, m_tunnel_dblspeed);
-}
-
-void app::stop_tunnel()
-{
-	com_tunnel.usart().close();
-	pin_txd::make_input();
-}
-
 void app::open_tunnel(uint8_t which, uint32_t baudrate)
 {
 	led_blink_short();
@@ -414,41 +394,40 @@ void app::open_tunnel(uint8_t which, uint32_t baudrate)
 
 	bool dblspeed = (pgm_read_byte(&usart_baudctrls[selected_index+2]) & 0x7f) != 0;
 
-	uint8_t blo = pgm_read_byte(&usart_baudctrls[selected_index+3]);
-	uint8_t bhi = pgm_read_byte(&usart_baudctrls[selected_index+4]);
+	uint16_t b = pgm_read_word(&usart_baudctrls[selected_index+3]);
 
 	if (which == 0)
 	{
 		m_tunnel_dblspeed = dblspeed;
-		m_tunnel_baudctrl = blo | (bhi << 8);
+		m_tunnel_baudctrl = b;
 		m_tunnel_open = true;
 		if (m_tunnel_allowed)
-			this->start_tunnel();
+			usb_tunnel_start(m_tunnel_baudctrl, m_tunnel_dblspeed);
 	}
 	else
 	{
-		com_dbg.usart().set_speed(blo | (bhi << 8), dblspeed);
+		com_dbg.usart().set_speed(b, dblspeed);
 	}
 }
 
 void app::close_tunnel()
 {
 	if (m_tunnel_open && m_tunnel_allowed)
-		this->stop_tunnel();
+		usb_tunnel_stop();
 	m_tunnel_open = false;
 }
 
 void app::allow_tunnel()
 {
 	if (!m_tunnel_allowed && m_tunnel_open)
-		this->start_tunnel();
+		usb_tunnel_start(m_tunnel_baudctrl, m_tunnel_dblspeed);
 	m_tunnel_allowed = true;
 }
 
 void app::disallow_tunnel()
 {
 	if (m_tunnel_allowed && m_tunnel_open)
-		this->stop_tunnel();
+		usb_tunnel_stop();
 	m_tunnel_allowed = false;
 }
 

@@ -7,7 +7,6 @@
 #include <string.h>
 
 com_usb_t com_usb;
-com_usb_tunnel_t com_usb_tunnel;
 com_usb_tunnel_t com_usb_tunnel2;
 bool usb_tunnel_send_test_packet = false;
 
@@ -75,7 +74,7 @@ uint8_t usb_yb_out_packet[256];
 uint8_t usb_yb_in_packet[256];
 
 static uint8_t ep3_out_buf[64];
-static uint8_t ep3_in_buf[64];
+static uint8_t ep3_in_bufx[2][64];
 
 static uint8_t ep4_out_buf[64];
 static uint8_t ep4_in_buf[64];
@@ -96,12 +95,15 @@ struct ep_descs_t
 
 // Note that __attribute__((aligned)) is actually ignored by avr-gcc for some reason.
 // I'm working around by aligning manually.
-static uint8_t ep_descs_buf[sizeof(ep_descs_t) + 1];
+static uint8_t ep_descs_buf[20 + sizeof(ep_descs_t) + 1];
 static uintptr_t const ep_descs_ptr = (uintptr_t)ep_descs_buf;
-static ep_descs_t * ep_descs = reinterpret_cast<ep_descs_t *>((ep_descs_ptr + 1) & ~(uintptr_t)1);
+static ep_descs_t * ep_descs = reinterpret_cast<ep_descs_t *>((ep_descs_ptr + 21) & ~(uintptr_t)1);
 
 static char const * usb_sn;
 static uint8_t usb_snlen;
+
+static void usb_in_tunnel_init();
+static void usb_in_tunnel_destroy();
 
 static uint8_t usb_config = 0;
 static bool set_config(uint8_t config)
@@ -113,27 +115,32 @@ static bool set_config(uint8_t config)
 	if (config)
 	{
 		ep_descs->ep1_out.STATUS = 0;
-		ep_descs->ep1_out.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
+		ep_descs->ep1_out.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
 		ep_descs->ep1_in.STATUS = USB_EP_BUSNACK0_bm;
-		ep_descs->ep1_in.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
+		ep_descs->ep1_in.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
 		ep_descs->ep2_out.STATUS = 0;
-		ep_descs->ep2_out.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_MULTIPKT_bm | USB_EP_BUFSIZE_64_gc;
+		ep_descs->ep2_out.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_BULK_gc | USB_EP_MULTIPKT_bm | USB_EP_BUFSIZE_64_gc;
 		ep_descs->ep2_out.AUXDATA = sizeof usb_yb_out_packet;
 		ep_descs->ep2_in.STATUS = USB_EP_BUSNACK0_bm;
-		ep_descs->ep2_in.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_MULTIPKT_bm | USB_EP_BUFSIZE_64_gc;
+		ep_descs->ep2_in.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_BULK_gc | USB_EP_MULTIPKT_bm | USB_EP_BUFSIZE_64_gc;
 		ep_descs->ep3_out.STATUS = 0;
-		ep_descs->ep3_out.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
+		ep_descs->ep3_out.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
 		ep_descs->ep3_in.STATUS = USB_EP_BUSNACK0_bm;
 		ep_descs->ep3_in.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
 		ep_descs->ep4_out.STATUS = 0;
-		ep_descs->ep4_out.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
+		ep_descs->ep4_out.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
 		ep_descs->ep4_in.STATUS = USB_EP_BUSNACK0_bm;
-		ep_descs->ep4_in.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
-		USB_CTRLA = USB_ENABLE_bm | USB_SPEED_bm | (4 << USB_MAXEP_gp);
+		ep_descs->ep4_in.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
+
+		USB_CTRLA = USB_ENABLE_bm | USB_SPEED_bm | USB_FIFOEN_bm | (4 << USB_MAXEP_gp);
+
+		usb_in_tunnel_init();
 	}
 	else
 	{
-		USB_CTRLA = USB_ENABLE_bm | USB_SPEED_bm | (0 << USB_MAXEP_gp);
+		usb_in_tunnel_destroy();
+
+		USB_CTRLA = USB_ENABLE_bm | USB_SPEED_bm | USB_FIFOEN_bm | (0 << USB_MAXEP_gp);
 		ep_descs->ep1_out.CTRL = 0;
 		ep_descs->ep1_in.CTRL = 0;
 	}
@@ -161,6 +168,8 @@ static void usb_tunnel_init()
 
 	DMA_CH0_ADDRCTRL = DMA_CH_SRCRELOAD_BLOCK_gc | DMA_CH_SRCDIR_INC_gc | DMA_CH_DESTRELOAD_NONE_gc | DMA_CH_DESTDIR_FIXED_gc;
 	DMA_CH0_TRIGSRC = DMA_CH_TRIGSRC_USARTC1_DRE_gc;
+
+	usb_in_tunnel_init();
 }
 
 static void usb_tunnel_poll()
@@ -195,7 +204,6 @@ void usb_init(char const * sn, uint8_t snlen)
 	ep_descs->ep2_in.DATAPTR  = (uint16_t)&usb_yb_in_packet;
 
 	ep_descs->ep3_out.DATAPTR = (uint16_t)&ep3_out_buf;
-	ep_descs->ep3_in.DATAPTR  = (uint16_t)&ep3_in_buf;
 
 	ep_descs->ep4_out.DATAPTR = (uint16_t)&ep4_out_buf;
 	ep_descs->ep4_in.DATAPTR  = (uint16_t)&ep4_in_buf;
@@ -206,8 +214,10 @@ void usb_init(char const * sn, uint8_t snlen)
 	NVM_CMD = NVM_CMD_NO_OPERATION_gc;
 
 	CLK_USBCTRL = CLK_USBSRC_PLL_gc | CLK_USBSEN_bm;
-	USB_CTRLA = USB_ENABLE_bm | USB_SPEED_bm | (0 << USB_MAXEP_gp);
+	USB_CTRLA = USB_ENABLE_bm | USB_SPEED_bm | USB_FIFOEN_bm | (0 << USB_MAXEP_gp);
 	USB_EPPTR = (uint16_t)ep_descs;
+	USB_INTCTRLB = USB_TRNIE_bm;
+	USB_INTCTRLA = USB_INTLVL_MED_gc;
 	USB_CTRLB = USB_ATTACH_bm;
 
 	usb_tunnel_init();
@@ -231,8 +241,8 @@ void usb_poll()
 		//send(com_dbg, "RESET\n");
 		USB_ADDR = 0;
 		set_config(0);
-		ep_descs->ep0_out.CTRL = USB_EP_TYPE_CONTROL_gc | USB_EP_STALL_bm | USB_EP_BUFSIZE_64_gc;
-		ep_descs->ep0_in.CTRL = USB_EP_TYPE_CONTROL_gc | USB_EP_STALL_bm | USB_EP_BUFSIZE_64_gc;
+		ep_descs->ep0_out.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_CONTROL_gc | USB_EP_STALL_bm | USB_EP_BUFSIZE_64_gc;
+		ep_descs->ep0_in.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_CONTROL_gc | USB_EP_STALL_bm | USB_EP_BUFSIZE_64_gc;
 		USB_INTFLAGSACLR = USB_RSTIF_bm;
 
 		led_blink_long();
@@ -256,22 +266,6 @@ void usb_poll()
 			ep_descs->ep1_out.STATUS &= ~USB_EP_BUSNACK0_bm;
 		}
 
-		if ((ep_descs->ep3_in.STATUS & USB_EP_BUSNACK0_bm) && usb_tunnel_send_test_packet)
-		{
-			memset(ep3_in_buf, 'x', 64);
-			ep_descs->ep3_in.CNT = 64;
-			ep_descs->ep3_in.STATUS &= ~USB_EP_BUSNACK0_bm;
-			usb_tunnel_send_test_packet = false;
-		}
-
-		if ((ep_descs->ep3_in.STATUS & USB_EP_BUSNACK0_bm) && com_usb_tunnel.tx_size() != 0)
-		{
-			memcpy(ep3_in_buf, com_usb_tunnel.tx_buffer(), com_usb_tunnel.tx_size());
-			ep_descs->ep3_in.CNT = com_usb_tunnel.tx_size();
-			ep_descs->ep3_in.STATUS &= ~USB_EP_BUSNACK0_bm;
-			com_usb_tunnel.tx_clear();
-		}
-
 		usb_tunnel_poll();
 
 		if ((ep_descs->ep4_in.STATUS & USB_EP_BUSNACK0_bm) && com_usb_tunnel2.tx_size() != 0)
@@ -287,6 +281,14 @@ void usb_poll()
 			memcpy(com_usb_tunnel2.rx_buffer(), ep4_out_buf, ep_descs->ep4_out.CNT);
 			com_usb_tunnel2.rx_reset(ep_descs->ep4_out.CNT);
 			ep_descs->ep4_out.STATUS &= ~USB_EP_BUSNACK0_bm;
+		}
+
+		if ((ep_descs->ep4_in.STATUS & USB_EP_BUSNACK0_bm) && usb_tunnel_send_test_packet)
+		{
+			memset(ep4_in_buf, 'x', 64);
+			ep_descs->ep4_in.CNT = 64;
+			ep_descs->ep4_in.STATUS &= ~USB_EP_BUSNACK0_bm;
+			usb_tunnel_send_test_packet = false;
 		}
 	}
 
@@ -458,8 +460,8 @@ void usb_poll()
 
 		if (!valid)
 		{
-			ep_descs->ep0_out.CTRL = USB_EP_TYPE_CONTROL_gc | USB_EP_STALL_bm | USB_EP_BUFSIZE_64_gc;
-			ep_descs->ep0_in.CTRL = USB_EP_TYPE_CONTROL_gc | USB_EP_STALL_bm | USB_EP_BUFSIZE_64_gc;
+			ep_descs->ep0_out.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_CONTROL_gc | USB_EP_STALL_bm | USB_EP_BUFSIZE_64_gc;
+			ep_descs->ep0_in.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_CONTROL_gc | USB_EP_STALL_bm | USB_EP_BUFSIZE_64_gc;
 		}
 	}
 }
@@ -498,4 +500,108 @@ void usb_yb_send_in_packet(uint16_t size)
 	ep_descs->ep2_in.AUXDATA = 0;
 	ep_descs->ep2_in.CNT = (size == sizeof usb_yb_out_packet)? size: (0x8000 | size);
 	ep_descs->ep2_in.STATUS &= ~USB_EP_BUSNACK0_bm;
+}
+
+static uint8_t volatile g_tin_current_dma_buf = 0;
+
+ISR(USARTC1_RXC_vect)
+{
+	ep3_in_bufx[1][0] = USARTC1_DATA;
+
+	uint16_t buf_addr = (uint16_t)ep3_in_bufx[0];
+	DMA_CH1_DESTADDR0 = (uint8_t)buf_addr;
+	DMA_CH1_DESTADDR1 = (uint8_t)(buf_addr >> 8);
+	DMA_CH1_DESTADDR2 = 0;
+	DMA_CH1_TRFCNT = sizeof ep3_in_bufx[0];
+	DMA_CH1_CTRLB = DMA_CH_TRNIF_bm;
+	DMA_CH1_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+
+	ep_descs->ep3_in.CNT = 1;
+	ep_descs->ep3_in.DATAPTR = (uint16_t)&ep3_in_bufx[1];
+	ep_descs->ep3_in.STATUS &= ~USB_EP_BUSNACK0_bm;
+	g_tin_current_dma_buf = 0;
+
+	USARTC1_CTRLA = 0;
+}
+
+ISR(USB_TRNCOMPL_vect)
+{
+	int8_t offs = (int8_t)USB_FIFORP;
+	uint16_t ep_addr = *((uint16_t *)ep_descs + offs);
+	AVRLIB_ASSERT(ep_addr == (uint16_t)&ep_descs->ep3_in);
+
+	DMA_CH1_CTRLA = 0;
+	while (DMA_CH1_CTRLA & DMA_CH_ENABLE_bm)
+	{
+	}
+
+	if (DMA_CH1_CTRLB & DMA_CH_TRNIF_bm)
+	{
+		ep_descs->ep3_in.CNT = sizeof ep3_in_bufx[g_tin_current_dma_buf];
+	}
+	else if (DMA_CH1_TRFCNT != sizeof ep3_in_bufx[g_tin_current_dma_buf])
+	{
+		ep_descs->ep3_in.CNT = sizeof ep3_in_bufx[g_tin_current_dma_buf] - DMA_CH1_TRFCNT;
+	}
+	else
+	{
+		USARTC1_CTRLA = USART_RXCINTLVL_MED_gc;
+		return;
+	}
+
+	ep_descs->ep3_in.DATAPTR = (uint16_t)&ep3_in_bufx[g_tin_current_dma_buf];
+	ep_descs->ep3_in.STATUS &= ~USB_EP_BUSNACK0_bm;
+	g_tin_current_dma_buf ^= 1;
+
+	uint16_t buf_addr = (uint16_t)ep3_in_bufx[g_tin_current_dma_buf];
+	DMA_CH1_DESTADDR0 = (uint8_t)buf_addr;
+	DMA_CH1_DESTADDR1 = (uint8_t)(buf_addr >> 8);
+	DMA_CH1_DESTADDR2 = 0;
+	DMA_CH1_TRFCNT = sizeof ep3_in_bufx[g_tin_current_dma_buf];
+	DMA_CH1_CTRLB = DMA_CH_TRNIF_bm;
+	DMA_CH1_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+}
+
+void usb_in_tunnel_init()
+{
+	DMA_CH1_SRCADDR0 = (uint8_t)(uint16_t)&USARTC1_DATA;
+	DMA_CH1_SRCADDR1 = (uint16_t)&USARTC1_DATA >> 8;
+	DMA_CH1_SRCADDR2 = 0;
+
+	DMA_CH1_TRIGSRC = DMA_CH_TRIGSRC_USARTC1_RXC_gc;
+	DMA_CH1_ADDRCTRL = DMA_CH_SRCRELOAD_NONE_gc | DMA_CH_SRCDIR_FIXED_gc | DMA_CH_DESTRELOAD_BLOCK_gc | DMA_CH_DESTDIR_INC_gc;
+
+	USARTC1_CTRLA = USART_RXCINTLVL_MED_gc;
+}
+
+void usb_in_tunnel_destroy()
+{
+	cli();
+	USARTC1_CTRLA = 0;
+	sei();
+
+	DMA_CH1_CTRLA = 0;
+	while (DMA_CH1_CTRLA & DMA_CH_ENABLE_bm)
+	{
+	}
+}
+
+void usb_tunnel_start(uint16_t baudctrl, bool dblspeed)
+{
+	USARTC1_CTRLB = 0;
+	pin_txd::make_high();
+	usb_in_tunnel_destroy();
+
+	USARTC1_BAUDCTRLA = (uint8_t)(baudctrl);
+	USARTC1_BAUDCTRLB = (uint8_t)(baudctrl >> 8);	
+	USARTC1_CTRLC = USART_CMODE_ASYNCHRONOUS_gc | (3<<USART_CHSIZE_gp);
+	USARTC1_CTRLB = USART_RXEN_bm | USART_TXEN_bm | (dblspeed? USART_CLK2X_bm: 0);
+	usb_in_tunnel_init();
+}
+
+void usb_tunnel_stop()
+{
+	USARTC1_CTRLB = 0;
+	pin_txd::make_input();
+	usb_in_tunnel_destroy();
 }
