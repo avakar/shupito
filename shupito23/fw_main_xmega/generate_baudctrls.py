@@ -93,7 +93,7 @@ for key in sorted(res):
     baudctrl = (bscale << 12) | bsel
 
     c = int(round(closest))
-    data = [c & 0xff, (c >> 8) & 0xff, (c >> 16) & 0xff, baudctrl >> 8, baudctrl & 0xff]
+    data = [c & 0xff, (c >> 8) & 0xff, (c >> 16) & 0xff, baudctrl & 0xff, baudctrl >> 8]
     if dbl:
         data[2] |= 0x80
 
