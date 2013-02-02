@@ -4,6 +4,7 @@
 #include "utils.hpp"
 #include "btn.hpp"
 #include "led.hpp"
+#include "tunnel.hpp"
 
 app g_app;
 

@@ -26,7 +26,4 @@ typedef avrlib::memory_stream<64, 64> com_usb_tunnel_t;
 extern com_usb_tunnel_t com_usb_tunnel2;
 extern bool usb_tunnel_send_test_packet;
 
-void usb_tunnel_start(uint16_t baudctrl, bool dblspeed);
-void usb_tunnel_stop();
-
 #endif // SHUPITO_USB_H
