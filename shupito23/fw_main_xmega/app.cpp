@@ -392,7 +392,7 @@ void app::open_tunnel(uint8_t which, uint32_t baudrate)
 		last_val = val;
 	}
 
-	bool dblspeed = (pgm_read_byte(&usart_baudctrls[selected_index+2]) & 0x7f) != 0;
+	bool dblspeed = (pgm_read_byte(&usart_baudctrls[selected_index+2]) & 0x80) != 0;
 
 	uint16_t b = pgm_read_word(&usart_baudctrls[selected_index+3]);
 
