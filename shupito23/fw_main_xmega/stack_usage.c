@@ -3,7 +3,7 @@
 extern uint8_t _end;
 extern uint8_t __stack;
 
-uint16_t get_stack_usage()
+uint16_t get_stack_usage(void)
 {
 	uint8_t const * p = &_end;
 	while (*p == 0xc5 && p <= &__stack)
@@ -12,7 +12,7 @@ uint16_t get_stack_usage()
 	return &__stack - p + 1;
 }
 
-uint16_t get_stack_size()
+uint16_t get_stack_size(void)
 {
 	return &__stack - &_end + 1;
 }

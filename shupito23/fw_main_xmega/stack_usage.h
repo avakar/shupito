@@ -7,8 +7,8 @@
 extern "C" {
 #endif
 
-uint16_t get_stack_usage();
-uint16_t get_stack_size();
+uint16_t get_stack_usage(void);
+uint16_t get_stack_size(void);
 
 #ifdef __cplusplus
 }
