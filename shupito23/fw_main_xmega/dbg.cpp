@@ -3,6 +3,7 @@
 #include "utils.hpp"
 #include "led.hpp"
 #include "usb.h"
+#include "stack_usage.h"
 
 void app::process_with_debug()
 {
@@ -51,6 +52,13 @@ void app::process_with_debug()
 		case '4':
 			pin_rst::make_input();
 			break;
+		case 's':
+			send(com_usb, "stack: ");
+			send_hex(com_usb, get_stack_usage());
+			com_usb.write('/');
+			send_hex(com_usb, get_stack_size());
+			com_usb.write('\n');
+			break;
 		case ' ':
 			pin_rst::make_input();
 			hiv_disable();
@@ -59,7 +67,7 @@ void app::process_with_debug()
 			send(com_usb, "Shupito 2.3\n");
 			// fallthrough
 		default:
-			send(com_usb, "?AbBvphH1234\n");
+			send(com_usb, "?AbBvphH1234s\n");
 			break;
 		}
 	}

@@ -115,6 +115,15 @@ $(MSBuildProjectDirectory)\generate_baudctrls.py &gt; $(MSBuildProjectDirectory)
     <Compile Include="spi.hpp">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="stack_usage.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="stack_usage.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="stack_usage_init.S">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="tunnel.cpp">
       <SubType>compile</SubType>
     </Compile>
