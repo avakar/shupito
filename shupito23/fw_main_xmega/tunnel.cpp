@@ -106,7 +106,7 @@ static void usb_out_tunnel_poll()
 // IN
 
 static uint8_t const tin_buf_size = 64;
-static uint8_t const tin_buf_count = 8;
+static uint8_t const tin_buf_count = 16;
 static uint8_t tin_bufs[tin_buf_count][tin_buf_size];
 static uint8_t volatile tin_rdptr = 0;
 static uint8_t volatile tin_wrptr = 0;
