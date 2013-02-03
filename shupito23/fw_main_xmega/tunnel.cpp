@@ -56,9 +56,9 @@ static uint8_t tout_buf[64];
 
 static void usb_out_tunnel_config()
 {
-	ep_descs->ep3_out.DATAPTR = (uint16_t)tout_buf;
-	ep_descs->ep3_out.STATUS = 0;
-	ep_descs->ep3_out.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
+	ep_descs->tunnel_out.DATAPTR = (uint16_t)tout_buf;
+	ep_descs->tunnel_out.STATUS = 0;
+	ep_descs->tunnel_out.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
 
 	tout_state = tos_idle;
 
@@ -87,10 +87,10 @@ static void usb_out_tunnel_deconfig()
 
 static void usb_out_tunnel_poll()
 {
-	if ((ep_descs->ep3_out.STATUS & USB_EP_BUSNACK0_bm) && tout_state == tos_idle)
+	if ((ep_descs->tunnel_out.STATUS & USB_EP_BUSNACK0_bm) && tout_state == tos_idle)
 	{
 		tout_state = tos_dma;
-		DMA_CH0_TRFCNT = ep_descs->ep3_out.CNT;
+		DMA_CH0_TRFCNT = ep_descs->tunnel_out.CNT;
 		DMA_CH0_CTRLB = DMA_CH_TRNIF_bm;
 		DMA_CH0_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
 	}
@@ -98,7 +98,7 @@ static void usb_out_tunnel_poll()
 	if (tout_state == tos_dma && (DMA_CH0_CTRLB & DMA_CH_TRNIF_bm))
 	{
 		tout_state = tos_idle;
-		ep_descs->ep3_out.STATUS &= ~USB_EP_BUSNACK0_bm;
+		ep_descs->tunnel_out.STATUS &= ~USB_EP_BUSNACK0_bm;
 	}
 }
 
@@ -113,8 +113,8 @@ static uint8_t volatile tin_wrptr = 0;
 
 void usb_in_tunnel_config()
 {
-	ep_descs->ep3_in.STATUS = USB_EP_BUSNACK0_bm;
-	ep_descs->ep3_in.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
+	ep_descs->tunnel_in.STATUS = USB_EP_BUSNACK0_bm;
+	ep_descs->tunnel_in.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
 
 	uint16_t data_ptr = (uint16_t)&USARTC1_DATA;
 	DMA_CH1_SRCADDR0 = (uint8_t)data_ptr;
@@ -152,9 +152,9 @@ ISR(USARTC1_RXC_vect)
 	DMA_CH1_CTRLB = DMA_CH_TRNIF_bm | DMA_CH_TRNINTLVL_MED_gc;
 	DMA_CH1_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
 
-	ep_descs->ep3_in.CNT = 1;
-	ep_descs->ep3_in.DATAPTR = (uint16_t)tin_bufs[0];
-	ep_descs->ep3_in.STATUS &= ~USB_EP_BUSNACK0_bm;
+	ep_descs->tunnel_in.CNT = 1;
+	ep_descs->tunnel_in.DATAPTR = (uint16_t)tin_bufs[0];
+	ep_descs->tunnel_in.STATUS &= ~USB_EP_BUSNACK0_bm;
 
 	tin_wrptr = 1;
 	tin_rdptr = 0;
@@ -239,10 +239,10 @@ void usb_ep3_in_trnif()
 		count = tin_buf_size;
 	}
 
-	ep_descs->ep3_in.CNT = count;
+	ep_descs->tunnel_in.CNT = count;
 
-	ep_descs->ep3_in.DATAPTR = (uint16_t)tin_bufs[rdptr];
-	ep_descs->ep3_in.STATUS &= ~USB_EP_BUSNACK0_bm;
+	ep_descs->tunnel_in.DATAPTR = (uint16_t)tin_bufs[rdptr];
+	ep_descs->tunnel_in.STATUS &= ~USB_EP_BUSNACK0_bm;
 
 	if (restart_dma)
 	{

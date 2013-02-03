@@ -80,9 +80,9 @@ static uint8_t ep4_in_buf[64];
 
 // Note that __attribute__((aligned)) is actually ignored by avr-gcc for some reason.
 // I'm working around by aligning manually.
-static uint8_t ep_descs_buf[20 + sizeof(ep_descs_t) + 1];
+static uint8_t ep_descs_buf[(usb_ep_num_max+1)*4 + sizeof(ep_descs_t) + 1];
 static uintptr_t const ep_descs_ptr = (uintptr_t)ep_descs_buf;
-ep_descs_t * ep_descs = reinterpret_cast<ep_descs_t *>((ep_descs_ptr + 21) & ~(uintptr_t)1);
+ep_descs_t * ep_descs = reinterpret_cast<ep_descs_t *>((ep_descs_ptr + (usb_ep_num_max+1)*4 + 1) & ~(uintptr_t)1);
 
 static char const * usb_sn;
 static uint8_t usb_snlen;
@@ -105,12 +105,14 @@ static bool set_config(uint8_t config)
 		ep_descs->ep2_out.AUXDATA = sizeof usb_yb_out_packet;
 		ep_descs->ep2_in.STATUS = USB_EP_BUSNACK0_bm;
 		ep_descs->ep2_in.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_BULK_gc | USB_EP_MULTIPKT_bm | USB_EP_BUFSIZE_64_gc;
+		ep_descs->ep3_out_x.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_DISABLE_gc;
 		ep_descs->ep4_out.STATUS = 0;
 		ep_descs->ep4_out.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
 		ep_descs->ep4_in.STATUS = USB_EP_BUSNACK0_bm;
 		ep_descs->ep4_in.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
+		ep_descs->ep5_in_x.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_DISABLE_gc;
 		usb_tunnel_config();
-		USB_CTRLA = USB_ENABLE_bm | USB_SPEED_bm | USB_FIFOEN_bm | (4 << USB_MAXEP_gp);
+		USB_CTRLA = USB_ENABLE_bm | USB_SPEED_bm | USB_FIFOEN_bm | (usb_ep_num_max << USB_MAXEP_gp);
 	}
 	else
 	{
@@ -434,6 +436,6 @@ ISR(USB_TRNCOMPL_vect)
 {
 	int8_t offs = (int8_t)USB_FIFORP;
 	uint16_t ep_addr = *((uint16_t *)ep_descs + offs);
-	AVRLIB_ASSERT(ep_addr == (uint16_t)&ep_descs->ep3_in);
+	AVRLIB_ASSERT(ep_addr == (uint16_t)&ep_descs->tunnel_in);
 	usb_ep3_in_trnif();
 }

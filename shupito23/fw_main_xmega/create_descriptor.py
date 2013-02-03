@@ -120,7 +120,7 @@ usb_desc = {
                         wMaxPacketSize=64,
                         bInterval=16),
                     EndpointDescriptor(
-                        bEndpointAddress=3,
+                        bEndpointAddress=5,
                         bmAttributes=Endpoint.Bulk,
                         wMaxPacketSize=64,
                         bInterval=16)
