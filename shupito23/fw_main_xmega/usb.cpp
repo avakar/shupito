@@ -105,7 +105,6 @@ static bool set_config(uint8_t config)
 		ep_descs->ep2_out.AUXDATA = sizeof usb_yb_out_packet;
 		ep_descs->ep2_in.STATUS = USB_EP_BUSNACK0_bm;
 		ep_descs->ep2_in.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_BULK_gc | USB_EP_MULTIPKT_bm | USB_EP_BUFSIZE_64_gc;
-		ep_descs->ep3_out_x.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_DISABLE_gc;
 		ep_descs->ep4_out.STATUS = 0;
 		ep_descs->ep4_out.CTRL = USB_EP_INTDSBL_bm | USB_EP_TYPE_BULK_gc | USB_EP_BUFSIZE_64_gc;
 		ep_descs->ep4_in.STATUS = USB_EP_BUSNACK0_bm;
@@ -434,8 +433,12 @@ void usb_yb_send_in_packet(uint16_t size)
 
 ISR(USB_TRNCOMPL_vect)
 {
+#if 0
 	int8_t offs = (int8_t)USB_FIFORP;
 	uint16_t ep_addr = *((uint16_t *)ep_descs + offs);
-	AVRLIB_ASSERT(ep_addr == (uint16_t)&ep_descs->tunnel_in);
+	AVRLIB_ASSERT(ep_addr == (uint16_t)&ep_descs->tunnel_in || ep_addr == (uint16_t)&ep_descs->tunnel_in_alt);
+#else
+	(void)USB_FIFORP;
+#endif
 	usb_ep3_in_trnif();
 }

@@ -11,7 +11,7 @@ struct ep_descs_t
 	USB_EP_t ep1_in;
 	USB_EP_t ep2_out;
 	USB_EP_t ep2_in;
-	USB_EP_t ep3_out_x;
+	USB_EP_t tunnel_in_alt;
 	USB_EP_t tunnel_in;
 	USB_EP_t ep4_out;
 	USB_EP_t ep4_in;
