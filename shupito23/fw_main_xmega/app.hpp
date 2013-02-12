@@ -77,7 +77,7 @@ public:
 	uint8_t select_handler(handler_base * new_handler);
 	void process_with_debug();
 
-	void open_tunnel(uint8_t which, uint32_t baudrate);
+	void open_tunnel(uint8_t which, uint32_t baudrate, uint8_t mode);
 	void close_tunnel();
 
 	void allow_tunnel();
@@ -104,6 +104,7 @@ private:
 	bool m_tunnel_allowed;
 	uint16_t m_tunnel_baudctrl;
 	bool m_tunnel_dblspeed;
+	uint8_t m_tunnel_mode;
 
 	bool m_assumed_btn_state;
 };

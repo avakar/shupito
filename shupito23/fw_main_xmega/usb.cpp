@@ -251,7 +251,40 @@ void usb_poll()
 					| ((uint32_t)ep0_out_buf[1] << 8)
 					| ((uint32_t)ep0_out_buf[2] << 16)
 					| ((uint32_t)ep0_out_buf[3] << 24);
-				g_app.open_tunnel(action.intf - 2, dwDTERate);
+				uint8_t bCharFormat = ep0_out_buf[4];
+				uint8_t bParityType = ep0_out_buf[5];
+				uint8_t bDataBits = ep0_out_buf[6];
+				
+				uint8_t mode = (bCharFormat == 0? 0: USART_SBMODE_bm);
+
+				switch (bDataBits)
+				{
+				case 5:
+					mode |= USART_CHSIZE_5BIT_gc;
+					break;
+				case 6:
+					mode |= USART_CHSIZE_6BIT_gc;
+					break;
+				case 7:
+					mode |= USART_CHSIZE_7BIT_gc;
+					break;
+				default:
+					mode |= USART_CHSIZE_8BIT_gc;
+				}
+
+				switch (bParityType)
+				{
+				case 1:
+					mode |= USART_PMODE_ODD_gc;
+					break;
+				case 2:
+					mode |= USART_PMODE_EVEN_gc;
+					break;
+				default:
+					mode |= USART_PMODE_DISABLED_gc;
+				}
+				
+				g_app.open_tunnel(action.intf - 2, dwDTERate, mode);
 
 				ep_descs->ep0_in.CNT = 0;
 				ep_descs->ep0_in.STATUS = USB_EP_TOGGLE_bm;

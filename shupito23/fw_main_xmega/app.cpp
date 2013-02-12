@@ -368,7 +368,7 @@ uint8_t app::select_handler(handler_base * new_handler)
 }
 
 #include "baudctrls.h"
-void app::open_tunnel(uint8_t which, uint32_t baudrate)
+void app::open_tunnel(uint8_t which, uint32_t baudrate, uint8_t mode)
 {
 	led_blink_short();
 
@@ -401,13 +401,15 @@ void app::open_tunnel(uint8_t which, uint32_t baudrate)
 	{
 		m_tunnel_dblspeed = dblspeed;
 		m_tunnel_baudctrl = b;
+		m_tunnel_mode = mode;
 		m_tunnel_open = true;
 		if (m_tunnel_allowed)
-			usb_tunnel_start(m_tunnel_baudctrl, m_tunnel_dblspeed);
+			usb_tunnel_start(m_tunnel_baudctrl, m_tunnel_mode, m_tunnel_dblspeed);
 	}
 	else
 	{
 		com_dbg.usart().set_speed(b, dblspeed);
+		com_dbg.usart().set_mode(mode);
 	}
 }
 
@@ -421,7 +423,7 @@ void app::close_tunnel()
 void app::allow_tunnel()
 {
 	if (!m_tunnel_allowed && m_tunnel_open)
-		usb_tunnel_start(m_tunnel_baudctrl, m_tunnel_dblspeed);
+		usb_tunnel_start(m_tunnel_baudctrl, m_tunnel_mode, m_tunnel_dblspeed);
 	m_tunnel_allowed = true;
 }
 

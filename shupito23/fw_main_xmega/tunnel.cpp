@@ -32,14 +32,14 @@ void usb_tunnel_poll()
 	usb_out_tunnel_poll();
 }
 
-void usb_tunnel_start(uint16_t baudctrl, bool dblspeed)
+void usb_tunnel_start(uint16_t baudctrl, uint8_t mode, bool dblspeed)
 {
 	USARTC1_CTRLB = 0;
 	pin_txd::make_high();
 
 	USARTC1_BAUDCTRLA = (uint8_t)(baudctrl);
 	USARTC1_BAUDCTRLB = (uint8_t)(baudctrl >> 8);
-	USARTC1_CTRLC = USART_CMODE_ASYNCHRONOUS_gc | (3<<USART_CHSIZE_gp);
+	USARTC1_CTRLC = USART_CMODE_ASYNCHRONOUS_gc | mode;
 	USARTC1_CTRLB = USART_RXEN_bm | USART_TXEN_bm | (dblspeed? USART_CLK2X_bm: 0);
 }
 
