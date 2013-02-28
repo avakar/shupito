@@ -60,6 +60,11 @@ res = []
 for dbl in (False, True):
     for bscale in xrange(-7, 8):
         for bsel in xrange(0, 0x1000):
+            if bsel == 0 and bscale != 0:
+                continue
+            clocks_per_frame = 10 * (8 if dbl else 16) * (bsel + 1)
+            if 2**abs(bscale) > clocks_per_frame // 2:
+                continue
             res.append((fbaud(32000000, bscale, bsel, dbl), -1 if dbl else 0, bscale, bsel))
 
 baudrates = {}
