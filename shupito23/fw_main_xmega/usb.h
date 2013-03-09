@@ -9,7 +9,7 @@
  *
  * The PLL clock must be configured to run at 48MHz.
  */
-void usb_init(char const * sn, uint8_t snlen);
+void usb_init(char const * sn, uint8_t snlen, uint8_t const * namedesc);
 
 void usb_poll();
 

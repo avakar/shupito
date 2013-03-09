@@ -1,5 +1,7 @@
 #include "app.hpp"
 #include "utils.hpp"
+#include "settings.hpp"
+#include <string.h>
 
 bool app::handle_packet(uint8_t cmd, uint8_t const * cp, uint8_t size, yb_writer & w)
 {
@@ -82,6 +84,16 @@ bool app::handle_packet(uint8_t cmd, uint8_t const * cp, uint8_t size, yb_writer
 				led_blink_long();
 				break;
 			}
+		}
+		break;
+
+	case 0x0e: // rename
+		if (size > 1 && cp[0] == 0 && (size % 2) == 1 && size <= 61)
+		{
+			g_namedesc[0] = size + 1;
+			g_namedesc[1] = 3;
+			memcpy(g_namedesc + 2, cp + 1, size - 1);
+			update_settings();
 		}
 		break;
 

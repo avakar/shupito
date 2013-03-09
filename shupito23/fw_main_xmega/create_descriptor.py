@@ -37,7 +37,10 @@ yb_desc = make_yb_desc(UUID('093d7f33-cdc6-4928-955d-513d17a85358'),
                 + hi.rev_hash), # fw version
             ),
         Config(UUID('e5e646a8-beb6-4a68-91f2-f005c72e9e57'), 12, 1, flags=0x03), # button
-        Config(UUID('9034d141-c47e-406b-a6fd-3f5887729f8f'), 13, 1, flags=0x03)  # led
+        Config(UUID('9034d141-c47e-406b-a6fd-3f5887729f8f'), 13, 1, flags=0x03), # led
+        Config(UUID('64d5bf39-468a-4fbb-80bb-334d8ca3ad81'), 14, 1, flags=0x03,  # rename
+            data=struct.pack('<BH', 1, 30)
+            )
         )
     )
 
@@ -152,7 +155,6 @@ usb_desc = {
             ]
         ),
     0x300: LangidsDescriptor([0x409]),
-    0x301: StringDescriptor('Shupito'),
     0x303: StringDescriptor('.debug'),
     0x304: StringDescriptor('tunnel'),
     0x305: StringDescriptor('bluetooth'),

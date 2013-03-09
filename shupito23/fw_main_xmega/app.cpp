@@ -5,6 +5,7 @@
 #include "btn.hpp"
 #include "led.hpp"
 #include "tunnel.hpp"
+#include "settings.hpp"
 
 app g_app;
 
@@ -78,6 +79,8 @@ app::app()
 
 void app::init()
 {
+	load_settings();
+
 	led_init();
 	pin_sup_3v3::make_low();
 	pin_sup_5v0::make_low();
@@ -163,7 +166,7 @@ void app::init()
 	// Start the conversion immediately
 	ADCA_CH0_CTRL |= ADC_CH_START_bm;
 
-	usb_init(m_usb_sn, sizeof m_usb_sn);
+	usb_init(m_usb_sn, sizeof m_usb_sn, g_namedesc);
 
 	m_vccio_timeout.init(clock, clock_t::us<100000>::value);
 	m_vccio_voltage = 0;

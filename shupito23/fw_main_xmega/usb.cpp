@@ -86,6 +86,7 @@ ep_descs_t * ep_descs = reinterpret_cast<ep_descs_t *>((ep_descs_ptr + (usb_ep_n
 
 static char const * usb_sn;
 static uint8_t usb_snlen;
+static uint8_t const * usb_namedesc;
 
 static uint8_t usb_config = 0;
 static bool set_config(uint8_t config)
@@ -122,10 +123,11 @@ static bool set_config(uint8_t config)
 	return true;
 }
 
-void usb_init(char const * sn, uint8_t snlen)
+void usb_init(char const * sn, uint8_t snlen, uint8_t const * namedesc)
 {
 	usb_sn = sn;
 	usb_snlen = snlen;
+	usb_namedesc = namedesc;
 
 	ep_descs->ep0_out.DATAPTR = (uint16_t)&ep0_out_buf;
 	ep_descs->ep0_in.DATAPTR  = (uint16_t)&ep0_in_buf;
@@ -355,7 +357,17 @@ void usb_poll()
 			break;
 		case usb_get_descriptor:
 			{
-				if (wValue == 0x302)
+				if (wValue == 0x301)
+				{
+					uint8_t snlen = usb_namedesc[0];
+					if (snlen < wLength)
+						wLength = snlen;
+					memcpy(ep0_in_buf, usb_namedesc, snlen);
+					ep_descs->ep0_in.CNT = wLength;
+					ep_descs->ep0_in.STATUS = USB_EP_TOGGLE_bm;
+					valid = true;
+				}
+				else if (wValue == 0x302)
 				{
 					uint8_t snlen = 2 + 2*usb_snlen;
 					if (snlen < wLength)

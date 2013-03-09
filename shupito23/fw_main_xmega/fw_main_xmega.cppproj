@@ -109,6 +109,12 @@ $(MSBuildProjectDirectory)\generate_baudctrls.py &gt; $(MSBuildProjectDirectory)
     <Compile Include="pins.hpp">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="settings.cpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="settings.hpp">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="spi.cpp">
       <SubType>compile</SubType>
     </Compile>
