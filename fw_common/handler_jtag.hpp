@@ -3,9 +3,9 @@
 
 #include "handler_base.hpp"
 
-template <typename Com, typename PinRst, typename PinClk, typename PinRx, typename PinTx, typename Process>
+template <typename PinRst, typename PinClk, typename PinRx, typename PinTx, typename Process>
 struct handler_jtagg
-	: handler_base<Com>
+	: handler_base
 {
 	typedef PinRst pin_tms;
 	typedef PinClk pin_tck;
@@ -17,7 +17,7 @@ struct handler_jtagg
 	{
 	}
 
-	bool handle_command(avrlib::command_parser & cp, Com & com)
+	bool handle_command(avrlib::command_parser & cp, com_t & com)
 	{
 		switch (cp.command())
 		{
@@ -45,8 +45,7 @@ struct handler_jtagg
 						}
 					}
 					tock();
-					com.write(0x80);
-					com.write(0x10);
+					com.send_sync(1, 0, 0);
 				}
 			}
 			return true;
@@ -55,9 +54,11 @@ struct handler_jtagg
 			{
 				uint8_t length = cp[0];
 
-				com.write(0x80);
-				com.write(0x20 | cp.size());
-				com.write(length);
+				uint8_t * wbuf = com.alloc(2, cp.size());
+				if (!wbuf)
+					return false;
+
+				*wbuf++ = length;
 
 				// PAUSE ->1 EXIT2 ->0 SHIFT
 				tick();
@@ -91,7 +92,7 @@ struct handler_jtagg
 							tdo |= 0x80;
 					}
 
-					com.write(tdo);
+					*wbuf++ = tdo;
 				}
 
 				// (SHIFT ->1) EXIT1 ->0 PAUSE
@@ -100,12 +101,15 @@ struct handler_jtagg
 				pin_tms::set_low();
 				tick();
 				tock();
+
+				com.commit();
 			}
 			return true;
 		case 3: // FREQUENCY 32'wait_time
-			com.write(0x80);
-			com.write(0x31);
-			com.write(0x01);
+			{
+				uint8_t err = 1;
+				com.send_sync(3, &err, 1);
+			}
 			return true;
 		case 4: // CLOCK 32'ticks
 			if (cp.size() >= 4)
@@ -125,9 +129,8 @@ struct handler_jtagg
 						tock();
 					}
 
-					com.write(0x80);
-					com.write(0x41);
-					com.write(clocks == 0);
+					uint8_t last = clocks == 0;
+					com.send_sync(4, &last, 1);
 				}
 			}
 			return true;
@@ -136,7 +139,7 @@ struct handler_jtagg
 		return false;
 	}
 
-	typename handler_base<Com>::error_t select()
+	handler_base::error_t select()
 	{
 		pin_tms::make_high();
 		pin_tck::make_low();

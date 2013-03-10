@@ -5,13 +5,12 @@
 #include "avrlib/stopwatch.hpp"
 #include <avr/io.h>
 
-template <typename Spi, typename Com, typename Clock, typename ResetPin, typename ClkPin, typename Process>
+template <typename Spi, typename Clock, typename ResetPin, typename ClkPin, typename Process>
 class handler_cc25xx
-	: public handler_base<Com>
+	: public handler_base
 {
 public:
 	typedef Spi spi_t;
-	typedef Com com_t;
 	typedef Clock clock_t;
 
 	handler_cc25xx(spi_t & spi, clock_t & clock, Process process = Process())
@@ -26,6 +25,7 @@ public:
 
 	bool handle_command(avrlib::command_parser & cp, com_t & com)
 	{
+		uint8_t err = 0;
 		switch (cp.command())
 		{
 		case 1: // PROGEN 2'bsel
@@ -45,10 +45,8 @@ public:
 				ResetPin::make_high();
 				avrlib::wait(clock, Clock::template us<1>::value);
 
-				uint8_t err = spi.start_master(cp[0] | (cp[1] << 8), true);
-				com.write(0x80);
-				com.write(0x11);
-				com.write(err);
+				err = spi.start_master(cp[0] | (cp[1] << 8), true);
+				com.send_sync(1, &err, 1);
 			}
 			break;
 		case 2:
@@ -59,19 +57,19 @@ public:
 			spi.clear();
 			ResetPin::make_input();
 
-			com.write(0x80);
-			com.write(0x21);
-			com.write(0);
+			com.send_sync(2, &err, 1);
 			break;
 		case 3: // CMD 1'read_count *'data
 			if (cp.size() >= 1)
 			{
+				uint8_t read_count = cp[0];
+				uint8_t * wbuf = com.alloc(3, read_count + 1);
+				if (!wbuf)
+					return false;
+
 				for (uint8_t i = 1; i < cp.size(); ++i)
 					spi.send(cp[i]);
 				spi.disable_tx();
-
-				com.write(0x80);
-				com.write(0x30 | (cp[0] + 1));
 
 				uint8_t err = 0;
 				for (uint8_t i = 0; i < cp[0]; ++i)
@@ -79,11 +77,12 @@ public:
 					uint8_t value = 0;
 					if (!err)
 						err = this->read_byte(value);
-					com.write(value);
+					*wbuf++ = value;
 				}
-				com.write(err);
-
 				spi.enable_tx();
+
+				*wbuf = err;
+				com.commit();
 			}
 			break;
 		case 4: // READ 2'count
@@ -95,24 +94,24 @@ public:
 
 				uint16_t count = cp[0] | (cp[1] << 8);
 
+				uint8_t max_packet = com.max_packet_size();
+
 				uint8_t err = 0;
 				bool sent_error = false;
 				for (;;)
 				{
-					uint8_t chunk = 0xf;
-					if (count < 0xf)
+					uint8_t chunk = max_packet;
+					if (count < chunk)
 						chunk = count;
 					if (err)
 						chunk = 0;
 					count -= chunk;
 
 					uint8_t packet_size = chunk;
-					if (chunk < 0xf && !sent_error)
+					if (chunk < max_packet && !sent_error)
 						++packet_size;
-					
-					com.write(0x80);
-					com.write(0x40 | packet_size);
 
+					uint8_t * wbuf = com.alloc_sync(4, packet_size);
 					for (uint8_t i = 0; i != chunk; ++i)
 					{
 						uint8_t value = 0;
@@ -134,17 +133,18 @@ public:
 							}
 						}
 
-						com.write(value);
+						*wbuf++ = value;
 						m_process();
 					}
 
-					if (chunk < 0xf && !sent_error)
+					if (chunk < max_packet && !sent_error)
 					{
 						sent_error = true;
-						com.write(err);
+						*wbuf++ = err;
 					}
-
-					if (packet_size < 0xf)
+					
+					com.commit();
+					if (packet_size < max_packet)
 						break;
 				}
 			}
@@ -169,9 +169,7 @@ public:
 					++addr;
 				}
 
-				com.write(0x80);
-				com.write(0x51);
-				com.write(err);
+				com.send_sync(5, &err, 1);
 			}
 			break;
 		default:

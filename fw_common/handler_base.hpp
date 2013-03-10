@@ -3,8 +3,14 @@
 
 #include "avrlib/command_parser.hpp"
 
-struct yb_writer
+class yb_writer
 {
+public:
+	explicit yb_writer(uint8_t max_packet_size)
+		: m_max_packet_size(max_packet_size)
+	{
+	}
+
 	virtual uint8_t * alloc(uint8_t cmd, uint8_t size) { return 0; }
 	virtual uint8_t * alloc_sync(uint8_t cmd, uint8_t size) { return 0; }
 	virtual void commit() {}
@@ -16,6 +22,7 @@ struct yb_writer
 		return m_max_packet_size;
 	}
 
+private:
 	uint8_t m_max_packet_size;
 };
 

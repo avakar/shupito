@@ -7,6 +7,7 @@
 #include "../../fw_common/avrlib/bootseq.hpp"
 #include "../../fw_common/avrlib/counter.hpp"
 #include "../../fw_common/avrlib/format.hpp"
+#include "../../fw_common/avrlib/xmega_pin.hpp"
 
 #include "../../fw_common/avrlib/usart_xc1.hpp"
 #include "../../fw_common/avrlib/usart_xd1.hpp"
@@ -18,6 +19,8 @@
 #include "../../fw_common/handler_xmega.hpp"
 #include "../../fw_common/handler_jtag.hpp"
 #include "../../fw_common/handler_spi.hpp"
+
+#include "../../fw_common/pdi.hpp"
 
 struct timer_xd0
 {
@@ -43,116 +46,33 @@ struct timer_xd0
 typedef timer_xd0 clock_t;
 clock_t clock;
 
-#define AVRLIB_MAKE_XMEGA_PIN(pin_name, port, pin) \
-	struct pin_name \
-	{ \
-		static void make_input() { port.DIRCLR = (1<<(pin)); } \
-		static void make_high() { port.OUTSET = (1<<(pin)); port.DIRSET = (1<<(pin)); } \
-		static void make_low() { port.OUTCLR = (1<<(pin)); port.DIRSET = (1<<(pin)); } \
-		static void make_output() { port.DIRSET = (1<<(pin)); } \
-		static void set_value(uint8_t value) { if (value) port.OUTSET = (1<<(pin)); else port.OUTCLR = (1<<(pin)); } \
-		static void set_high() { port.OUTSET = (1<<(pin)); } \
-		static void set_low() { port.OUTCLR = (1<<(pin)); } \
-		static uint8_t get_value() { return (port.OUT & (1<<(pin))) != 0; } \
-		static void toggle() { port.OUTTGL = (1<<(pin)); } \
-		static void pullup() { port.PIN##pin##CTRL = (port.PIN##pin##CTRL & ~PORT_OPC_gm) | PORT_OPC_PULLUP_gc; } \
-		static void pulldown() { port.PIN##pin##CTRL = (port.PIN##pin##CTRL & ~PORT_OPC_gm) | PORT_OPC_PULLDOWN_gc; } \
-		static void totem() { port.PIN##pin##CTRL = (port.PIN##pin##CTRL & ~PORT_OPC_gm) | PORT_OPC_TOTEM_gc; } \
-		static bool read() { return (port.IN & (1<<(pin))) != 0; } \
-	}
+AVRLIB_DEFINE_XMEGA_PIN(pin_sup_3v3, PORTB, 2);
+AVRLIB_DEFINE_XMEGA_PIN(pin_sup_5v0, PORTB, 0);
 
-AVRLIB_MAKE_XMEGA_PIN(pin_sup_3v3, PORTB, 2);
-AVRLIB_MAKE_XMEGA_PIN(pin_sup_5v0, PORTB, 0);
+AVRLIB_DEFINE_XMEGA_PIN(pin_switched_pwr_en, PORTC, 0);
 
-AVRLIB_MAKE_XMEGA_PIN(pin_switched_pwr_en, PORTC, 0);
+AVRLIB_DEFINE_XMEGA_PIN(pin_led,     PORTA, 2);
 
-AVRLIB_MAKE_XMEGA_PIN(pin_led,     PORTA, 2);
+AVRLIB_DEFINE_XMEGA_PIN(pin_pdid, PORTD, 1);
+AVRLIB_DEFINE_XMEGA_PIN(pin_rstd, PORTD, 0);
+AVRLIB_DEFINE_XMEGA_PIN(pin_rst,  PORTC, 1);
 
-AVRLIB_MAKE_XMEGA_PIN(pin_pdid, PORTD, 1);
-AVRLIB_MAKE_XMEGA_PIN(pin_rstd, PORTD, 0);
-AVRLIB_MAKE_XMEGA_PIN(pin_rst,  PORTC, 1);
+AVRLIB_DEFINE_XMEGA_PIN(pin_pdi,  PORTC, 3);
+AVRLIB_DEFINE_XMEGA_PIN(pin_xck,  PORTC, 5);
 
-AVRLIB_MAKE_XMEGA_PIN(pin_pdi,  PORTC, 3);
-AVRLIB_MAKE_XMEGA_PIN(pin_xck,  PORTC, 5);
+AVRLIB_DEFINE_XMEGA_PIN(pin_rxd,  PORTC, 6);
+AVRLIB_DEFINE_XMEGA_PIN(pin_txd,  PORTC, 7);
+AVRLIB_DEFINE_XMEGA_PIN(pin_txdd, PORTD, 2);
 
-AVRLIB_MAKE_XMEGA_PIN(pin_rxd,  PORTC, 6);
-AVRLIB_MAKE_XMEGA_PIN(pin_txd,  PORTC, 7);
-AVRLIB_MAKE_XMEGA_PIN(pin_txdd, PORTD, 2);
+AVRLIB_DEFINE_XMEGA_PIN(pin_usb_rtr_n, PORTD, 3);
+AVRLIB_DEFINE_XMEGA_PIN(pin_usb_cts_n, PORTD, 4);
+AVRLIB_DEFINE_XMEGA_PIN(pin_usb_xck,   PORTD, 5);
+AVRLIB_DEFINE_XMEGA_PIN(pin_usb_rx,    PORTD, 6);
+AVRLIB_DEFINE_XMEGA_PIN(pin_usb_tx,    PORTD, 7);
 
-AVRLIB_MAKE_XMEGA_PIN(pin_usb_rtr_n, PORTD, 3);
-AVRLIB_MAKE_XMEGA_PIN(pin_usb_cts_n, PORTD, 4);
-AVRLIB_MAKE_XMEGA_PIN(pin_usb_xck,   PORTD, 5);
-AVRLIB_MAKE_XMEGA_PIN(pin_usb_rx,    PORTD, 6);
-AVRLIB_MAKE_XMEGA_PIN(pin_usb_tx,    PORTD, 7);
-
-AVRLIB_MAKE_XMEGA_PIN(pin_sysclk, PORTE, 1);
-AVRLIB_MAKE_XMEGA_PIN(pin_bt_rx, PORTE, 2);
-AVRLIB_MAKE_XMEGA_PIN(pin_bt_tx, PORTE, 3);
-
-template <typename ValuePin, typename OePin>
-struct pin_buffer_with_oe
-{
-	static void init()
-	{
-		ValuePin::make_input();
-		OePin::make_low();
-	}
-
-	static void clear()
-	{
-		ValuePin::make_input();
-		OePin::make_input();
-	}
-
-	static void make_input()
-	{
-		ValuePin::make_input();
-		OePin::set_value(0);
-	}
-
-	static void make_high()
-	{
-		OePin::set_value(1);
-		ValuePin::make_high();
-	}
-
-	static void make_low()
-	{
-		OePin::set_value(1);
-		ValuePin::make_low();
-	}
-
-	static void make_output()
-	{
-		OePin::set_value(1);
-		ValuePin::make_output();
-	}
-
-	static void set_value(uint8_t value)
-	{
-		ValuePin::set_value(value);
-	}
-
-	static void set_high()
-	{
-		ValuePin::set_high();
-	}
-
-	static void set_low()
-	{
-		ValuePin::set_low();
-	}
-
-	static bool read()
-	{
-		return ValuePin::read();
-	}
-
-	static void toggle()
-	{
-		ValuePin::toggle();
-	}
-};
+AVRLIB_DEFINE_XMEGA_PIN(pin_sysclk, PORTE, 1);
+AVRLIB_DEFINE_XMEGA_PIN(pin_bt_rx, PORTE, 2);
+AVRLIB_DEFINE_XMEGA_PIN(pin_bt_tx, PORTE, 3);
 
 typedef pin_buffer_with_oe<pin_txd, pin_txdd> pin_buf_txd;
 typedef pin_buffer_with_oe<pin_rst, pin_rstd> pin_buf_rst;
@@ -172,21 +92,51 @@ typedef avrlib::async_usart<avrlib::usart_xc1, 64, 64> com_app_t;
 com_app_t com_app;
 ISR(USARTC1_RXC_vect) { com_app.intr_rx(); }
 
-struct com_writer_t {
+struct com_writer_t : yb_writer
+{
+public:
+	com_writer_t()
+		: yb_writer(15)
+	{
+	}
+
 	virtual void write(uint8_t value) {}
 	virtual bool tx_reserve(uint8_t value) { return false; }
+
+	virtual uint8_t * alloc(uint8_t cmd, uint8_t size);
+	virtual uint8_t * alloc_sync(uint8_t cmd, uint8_t size);
+	virtual void commit();
+	virtual bool send(uint8_t cmd, uint8_t const * data, uint8_t size);
+	virtual void send_sync(uint8_t cmd, uint8_t const * data, uint8_t size);
+
+private:
+	uint8_t m_buffer[16];
 };
 
 struct com_inner_writer_t : com_writer_t
 {
-	virtual void write(uint8_t value) { com_inner.write(value); }
-	virtual bool tx_reserve(uint8_t size) { return com_inner.tx_reserve(size); }
+	virtual void write(uint8_t value)
+	{
+		com_inner.write(value);
+	}
+
+	virtual bool tx_reserve(uint8_t size)
+	{
+		return com_inner.tx_reserve(size);
+	}
 } com_inner_writer;
 
 struct com_outer_writer_t : com_writer_t
 {
-	virtual void write(uint8_t value) { com_outer.write(value); }
-	virtual bool tx_reserve(uint8_t size) { return com_outer.tx_reserve(size); }
+	virtual void write(uint8_t value)
+	{
+		com_outer.write(value);
+	}
+
+	virtual bool tx_reserve(uint8_t size)
+	{
+		return com_outer.tx_reserve(size);
+	}
 } com_outer_writer;
 
 void avrlib::assertion_failed(char const * message, char const * file, int line)
@@ -220,234 +170,20 @@ public:
 
 spi_t spi;
 
-template <typename Clock, typename PdiClk, typename PdiData>
-class pdi_t
+struct led_holder
 {
-public:
-	explicit pdi_t(Clock & clock)
-		: m_clock(clock), m_state(st_disabled)
+	static void on()
 	{
+		pin_led::set_value(true);
 	}
 
-	void clear()
+	static void off()
 	{
-		if (m_state == st_disabled)
-			return;
-
-		this->cancel_read();
-		while (m_state != st_idle)
-			this->process();
-
-		// A few more clocks should be supplied
-		// to make sure that the last byte was received correctly
-		m_state = st_unrst;
-		m_time_base = m_clock.value();
 		pin_led::set_value(false);
 	}
-
-	void init(uint16_t bsel)
-	{
-		if (bsel)
-			--bsel;
-		USARTC0.BAUDCTRLA = bsel;
-		USARTC0.BAUDCTRLB = bsel >> 8;
-
-		if (m_state != st_disabled)
-			return;
-
-		PORTC.PIN1CTRL = PORT_INVEN_bm;
-
-		// PdiClk is now inverted, so as to make
-		// the USART sample on the rising edge.
-		// The following will therefor NOT put the chip
-		// in reset (which we don't want to, enabling the PDI
-		// might be a prelude to debugging).
-		PdiClk::make_low();
-
-		PdiData::make_high();
-		m_state = st_rst_disable;
-
-		m_time_base = m_clock.value();
-	}
-
-	bool tx_ready() const
-	{
-		return (m_state == st_idle || m_state == st_busy) && !m_tx_buffer.full() && m_rx_count == 0;
-	}
-
-	bool tx_empty() const
-	{
-		return m_tx_buffer.empty();
-	}
-
-	bool rx_ready() const
-	{
-		return !m_rx_buffer.empty();
-	}
-
-	void write(uint8_t data, uint8_t rx_count = 0)
-	{
-		while (!this->tx_ready())
-			this->process();
-
-		USARTC0.CTRLA = 0;
-		m_tx_buffer.push(data);
-		m_rx_count = rx_count;
-		m_state = st_busy;
-		USARTC0.CTRLA = USART_DREINTLVL_MED_gc;
-	}
-
-	uint8_t read()
-	{
-		while (!this->rx_ready())
-			this->process();
-
-		uint8_t res = m_rx_buffer.top();
-		m_rx_buffer.pop();
-		return res;
-	}
-
-	void cancel_read()
-	{
-		if (m_rx_count)
-			this->cancel();
-	}
-
-	void cancel()
-	{
-		if (m_state == st_busy)
-		{
-			USARTC0.CTRLA = 0;
-			USARTC0.CTRLB = USART_TXEN_bm;
-			PdiData::make_output();
-			m_rx_count = 0;
-			m_tx_buffer.clear();
-			m_rx_buffer.clear();
-			m_state = st_idle;
-		}
-	}
-
-	// Must be called at least every 50us
-	void process()
-	{
-		switch (m_state)
-		{
-		case st_disabled:
-			break;
-		case st_rst_disable:
-			if (m_clock.value() - m_time_base > Clock::template us<8>::value)
-			{
-				USARTC0.CTRLC = USART_CMODE_SYNCHRONOUS_gc | USART_PMODE_EVEN_gc | USART_SBMODE_bm
-					| USART_CHSIZE_8BIT_gc;
-				USARTC0.CTRLA = 0;
-				USARTC0.CTRLB = USART_TXEN_bm;
-
-				m_state = st_wait_ticks;
-				m_time_base = m_clock.value();
-			}
-			break;
-		case st_wait_ticks:
-			// worst-case scenario is 10kHz programming speed
-			if (m_clock.value() - m_time_base > Clock::template us<1800>::value)
-			{
-				m_state = st_idle;
-				m_rx_count = 0;
-				pdi_stcs(*this, 0x02/*CTRL*/, 0x02/*GUARDTIME_32*/);
-			}
-			break;
-		case st_idle:
-			pin_led::set_value(false);
-			break;
-		case st_rx_done:
-			m_time_base = m_clock.value();
-			m_state = st_rx_done_wait;
-			//fallthrough
-		case st_rx_done_wait:
-			if (m_clock.value() - m_time_base > Clock::template us<100>::value)
-				m_state = st_idle;
-			//fallthrough
-		case st_busy:
-			pin_led::set_value(true);
-			break;
-		case st_unrst:
-			if (m_clock.value() - m_time_base > Clock::template us<100>::value)
-			{
-				PdiClk::make_input();
-				PdiData::make_input();
-				PORTC.PIN1CTRL = 0;
-
-				USARTC0.CTRLA = 0;
-				USARTC0.CTRLB = 0;
-				USARTC0.CTRLC = 0;
-
-				m_state = st_disabled;
-			}
-			break;
-		}
-	}
-
-	bool enabled() const
-	{
-		return m_state != st_disabled && m_state != st_unrst;
-	}
-
-	void intr_rxc()
-	{
-		m_rx_buffer.push(USARTC0.DATA);
-		if (--m_rx_count == 0)
-		{
-			USARTC0.CTRLA = 0;
-			USARTC0.CTRLB = USART_TXEN_bm;
-			PdiData::make_output();
-			m_state = st_rx_done;
-		}
-	}
-
-	void intr_udre()
-	{
-		AVRLIB_ASSERT(!m_tx_buffer.empty());
-
-		cli();
-		USARTC0.DATA = m_tx_buffer.top();
-		USARTC0.STATUS = USART_TXCIF_bm;
-		sei();
-
-		m_tx_buffer.pop();
-		if (m_tx_buffer.empty())
-		{
-			USARTC0.CTRLA = USART_TXCINTLVL_HI_gc;
-		}
-	}
-	
-	void intr_txc()
-	{
-		AVRLIB_ASSERT(m_tx_buffer.empty());
-
-		if (m_rx_count)
-		{
-			PdiData::make_input();
-			USARTC0.CTRLB = USART_RXEN_bm;
-			USARTC0.CTRLA = USART_RXCINTLVL_MED_gc;
-		}
-		else
-		{
-			m_state = st_idle;
-			USARTC0.CTRLA = 0;
-		}
-	}
-
-	uint8_t state() const { return m_state; }
-
-private:
-	Clock & m_clock;
-	typename Clock::time_type m_time_base;
-	avrlib::buffer<uint8_t, 16> m_rx_buffer;
-	avrlib::buffer<uint8_t, 16> m_tx_buffer;
-	volatile uint8_t m_rx_count;
-
-	enum { st_disabled, st_rst_disable, st_wait_ticks, st_idle, st_rx_done, st_rx_done_wait, st_busy, st_unrst } volatile m_state;
 };
-typedef pdi_t<clock_t, pin_buf_rst, pin_buf_pdi> my_pdi_t;
+
+typedef pdi_t<clock_t, pin_buf_rst, pin_buf_pdi, led_holder> my_pdi_t;
 my_pdi_t pdi(clock);
 
 ISR(USARTC0_DRE_vect) { pdi.intr_udre(); }
@@ -970,19 +706,19 @@ private:
 						switch (cp[2])
 						{
 						case 0:
-							err = this->select_handler(h_spi);
+							err = this->select_handler(&havricsp);
 							break;
 						case 1:
-							err = this->select_handler(handler_pdi);
+							err = this->select_handler(&hxmega);
 							break;
 						case 2:
-							err = this->select_handler(handler_jtag);
+							err = this->select_handler(&hjtag);
 							break;
 						case 3:
-							err = this->select_handler(h_cc25xx);
+							err = this->select_handler(&hcc25xx);
 							break;
 						case 4:
-							err = this->select_handler(h_gen_spi);
+							err = this->select_handler(&hspi);
 							break;
 						}
 
@@ -1007,7 +743,7 @@ private:
 				{
 					if (cp.size() == 3 && cp[1] == 0)
 					{
-						this->select_handler(handler_none);
+						this->select_handler(0);
 						m_primary_com = 0;
 					}
 
@@ -1064,37 +800,14 @@ private:
 			break;
 		default:
 			if (&com == m_primary_com && handler)
-				return handler->handle_command(cp, com);
+				return handler->handle_command(cp.command(), cp.data(), cp.size(), com);
 		}
 
 		return false;
 	}
 
-	enum handler_t { handler_none, h_spi, handler_pdi, handler_jtag, h_cc25xx, h_gen_spi };
-	uint8_t select_handler(handler_t h)
+	uint8_t select_handler(handler_base * new_handler)
 	{
-		handler_base<com_writer_t> * new_handler;
-		switch (h)
-		{
-		case h_spi:
-			new_handler = &havricsp;
-			break;
-		case handler_pdi:
-			new_handler = &hxmega;
-			break;
-		case handler_jtag:
-			new_handler = &hjtag;
-			break;
-		case h_cc25xx:
-			new_handler = &hcc25xx;
-			break;
-		case h_gen_spi:
-			new_handler = &hspi;
-			break;
-		default:
-			new_handler = 0;
-		}
-
 		uint8_t err = 0;
 
 		if (new_handler != handler)
@@ -1115,12 +828,12 @@ private:
 	avrlib::bootseq bootseq;
 	avrlib::command_parser cp_outer, cp_inner;
 
-	handler_xmega<my_pdi_t, com_writer_t, clock_t, process_t> hxmega;
-	handler_avricsp<spi_t, com_writer_t, clock_t, pin_buf_rst, process_t> havricsp;
-	handler_jtagg<com_writer_t, pin_buf_rst, pin_buf_xck, pin_buf_rxd, pin_buf_txd, process_t> hjtag;
-	handler_cc25xx<spi_t, com_writer_t, clock_t, pin_buf_rst, pin_buf_xck, process_t> hcc25xx;
-	handler_spi<spi_t, com_writer_t, pin_buf_rst> hspi;
-	handler_base<com_writer_t> * handler;
+	handler_xmega<my_pdi_t, clock_t, process_t> hxmega;
+	handler_avricsp<spi_t, clock_t, pin_buf_rst, process_t> havricsp;
+	handler_jtagg<pin_buf_rst, pin_buf_xck, pin_buf_rxd, pin_buf_txd, process_t> hjtag;
+	handler_cc25xx<spi_t, clock_t, pin_buf_rst, pin_buf_xck, process_t> hcc25xx;
+	handler_spi<spi_t, pin_buf_rst> hspi;
+	handler_base * handler;
 
 	avrlib::timeout<clock_t> vdd_timeout;
 	avrlib::timeout<clock_t> m_vccio_drive_check_timeout;
@@ -1147,6 +860,65 @@ void process_t::operator()() const
 	com_inner.process_tx();
 	com_outer.process_tx();
 	com_app.process_tx();
+}
+
+uint8_t * com_writer_t::alloc(uint8_t cmd, uint8_t size)
+{
+	if (!this->tx_reserve(size + 2))
+		return 0;
+	m_buffer[0] = (cmd << 4) | size;
+	return m_buffer + 1;
+}
+
+uint8_t * com_writer_t::alloc_sync(uint8_t cmd, uint8_t size)
+{
+	for (;;)
+	{
+		uint8_t * res = this->alloc(cmd, size);
+		if (res)
+			return res;
+		g_process();
+	}
+}
+
+void com_writer_t::commit()
+{
+	this->write(0x80);
+
+	uint8_t size = (m_buffer[0] & 0xf) + 1;
+	for (uint8_t i = 0; i < size; ++i)
+		this->write(m_buffer[i]);
+}
+
+bool com_writer_t::send(uint8_t cmd, uint8_t const * data, uint8_t size)
+{
+	if (!this->tx_reserve(size + 2))
+		return false;
+
+	this->write(0x80);
+	this->write((cmd << 4)|size);
+	while (size)
+	{
+		this->write(*data);
+		++data;
+		--size;
+	}
+	return true;
+}
+
+void com_writer_t::send_sync(uint8_t cmd, uint8_t const * data, uint8_t size)
+{
+	while (!this->tx_reserve(size + 2))
+		g_process();
+
+	this->write(0x80);
+	this->write((cmd << 4)|size);
+	while (size)
+	{
+		this->write(*data);
+		++data;
+		--size;
+	}
 }
 
 void spi_t::clear()

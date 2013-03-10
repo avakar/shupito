@@ -24,8 +24,8 @@ com_dbg_t com_dbg;
 ISR(USARTE0_RXC_vect) { com_dbg.intr_rx(); }
 
 usb_yb_writer::usb_yb_writer()
+	: yb_writer(255)
 {
-	m_max_packet_size = 255;
 }
 
 uint8_t * usb_yb_writer::alloc(uint8_t cmd, uint8_t size)

@@ -3,13 +3,12 @@
 
 #include "handler_base.hpp"
 
-template <typename Spi, typename Com, typename ResetPin>
+template <typename Spi, typename ResetPin>
 class handler_spi
-	: public handler_base<Com>
+	: public handler_base
 {
 public:
 	typedef Spi spi_t;
-	typedef Com com_t;
 
 	handler_spi(spi_t & spi)
 		: spi(spi)
@@ -38,37 +37,37 @@ public:
 				if (!err)
 					ResetPin::make_high();
 
-				com.write(0x80);
-				com.write(0x11);
-				com.write(err);
+				com.send_sync(1, &err, 1);
 			}
 			break;
 		case 2: // Leave programming mode
 			spi.clear();
 			ResetPin::make_input();
 
-			com.write(0x80);
-			com.write(0x21);
-			com.write(0);
+			{
+				uint8_t err = 0;
+				com.send_sync(2, &err, 1);
+			}
 			break;
 
 		case 3: // COMM 1'flags *'data
 			{
-				com.write(0x80);
 				if (cp.size() == 0)
 				{
-					com.write(0x31);
-					com.write(1);
+					uint8_t err = 1;
+					com.send_sync(3, &err, 1);
 				}
 				else
 				{
-					com.write(0x30 | cp.size());
-					com.write(0);
+					uint8_t * wbuf = com.alloc_sync(3, cp.size());
+					*wbuf++ = 0;
 
 					ResetPin::set_value((cp[0] & 1) != 0);
 					for (uint8_t i = 1; i < cp.size(); ++i)
-						com.write(spi.send(cp[i]));
+						*wbuf++ = spi.send(cp[i]);
 					ResetPin::set_value((cp[0] & 2) != 0);
+
+					com.commit();
 				}
 			}
 			break;
