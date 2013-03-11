@@ -117,6 +117,7 @@ static bool set_config(uint8_t config)
 	else
 	{
 		USB_CTRLA = USB_ENABLE_bm | USB_SPEED_bm | USB_FIFOEN_bm | (0 << USB_MAXEP_gp);
+		g_app.close_tunnel();
 		usb_tunnel_deconfig();
 	}
 

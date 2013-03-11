@@ -8,7 +8,8 @@
 #include <avr/interrupt.h>
 
 static void usb_in_tunnel_config();
-static void usb_in_tunnel_deconfig();
+static void usb_in_tunnel_start();
+static void usb_in_tunnel_stop();
 static void usb_out_tunnel_config();
 static void usb_out_tunnel_deconfig();
 static void usb_out_tunnel_poll();
@@ -22,7 +23,6 @@ void usb_tunnel_config()
 
 void usb_tunnel_deconfig()
 {
-	usb_in_tunnel_deconfig();
 	usb_out_tunnel_deconfig();
 	DMA_CTRL = 0;
 }
@@ -34,17 +34,20 @@ void usb_tunnel_poll()
 
 void usb_tunnel_start(uint16_t baudctrl, uint8_t mode, bool dblspeed)
 {
+	usb_in_tunnel_stop();
 	USARTC1_CTRLB = 0;
-	pin_txd::make_high();
 
+	pin_txd::make_high();
 	USARTC1_BAUDCTRLA = (uint8_t)(baudctrl);
 	USARTC1_BAUDCTRLB = (uint8_t)(baudctrl >> 8);
 	USARTC1_CTRLC = USART_CMODE_ASYNCHRONOUS_gc | mode;
 	USARTC1_CTRLB = USART_RXEN_bm | USART_TXEN_bm | (dblspeed? USART_CLK2X_bm: 0);
+	usb_in_tunnel_start();
 }
 
 void usb_tunnel_stop()
 {
+	usb_in_tunnel_stop();
 	USARTC1_CTRLB = 0;
 	pin_txd::make_input();
 }
@@ -133,6 +136,8 @@ static uint8_t const tin_buf_count = 16;
 static uint8_t tin_bufs[tin_buf_count][tin_buf_size];
 static uint8_t volatile tin_rdptr = 0;
 static uint8_t volatile tin_wrptr = 0;
+static bool volatile tin_enabled = false;
+static bool volatile tin_transfer_active = false;
 
 void usb_in_tunnel_config()
 {
@@ -147,15 +152,42 @@ void usb_in_tunnel_config()
 
 	DMA_CH1_TRIGSRC = DMA_CH_TRIGSRC_USARTC1_RXC_gc;
 	DMA_CH1_ADDRCTRL = DMA_CH_SRCRELOAD_NONE_gc | DMA_CH_SRCDIR_FIXED_gc | DMA_CH_DESTRELOAD_BLOCK_gc | DMA_CH_DESTDIR_INC_gc;
-
-	USARTC1_CTRLA = USART_RXCINTLVL_MED_gc;
 }
 
-void usb_in_tunnel_deconfig()
+void usb_in_tunnel_start()
+{
+	if (!tin_enabled)
+	{
+		cli();
+		tin_enabled = true;
+		if (tin_transfer_active)
+		{
+			uint8_t wrptr = tin_wrptr;
+			if (tin_rdptr != wrptr)
+			{
+				uint16_t buf_addr = (uint16_t)tin_bufs[wrptr];
+				DMA_CH1_DESTADDR0 = (uint8_t)buf_addr;
+				DMA_CH1_DESTADDR1 = (uint8_t)(buf_addr >> 8);
+				DMA_CH1_DESTADDR2 = 0;
+				DMA_CH1_TRFCNT = tin_buf_size;
+				DMA_CH1_CTRLB = DMA_CH_TRNIF_bm | DMA_CH_TRNINTLVL_MED_gc;
+				DMA_CH1_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+			}
+		}
+		else
+		{
+			USARTC1_CTRLA = USART_RXCINTLVL_MED_gc;
+		}
+		sei();
+	}
+}
+
+void usb_in_tunnel_stop()
 {
 	cli();
 	USARTC1_CTRLA = 0;
 	DMA_CH1_CTRLB = 0;
+	tin_enabled = false;
 	sei();
 
 	DMA_CH1_CTRLA = 0;
@@ -184,6 +216,7 @@ ISR(USARTC1_RXC_vect)
 	tin_rdptr = 0;
 
 	USARTC1_CTRLA = 0;
+	tin_transfer_active = true;
 }
 
 ISR(DMA_CH1_vect)
@@ -247,6 +280,12 @@ void usb_ep3_in_trnif()
 	uint8_t count;
 	if (rdptr == wrptr)
 	{
+		if (!tin_enabled)
+		{
+			tin_transfer_active = false;
+			return;
+		}
+
 		DMA_CH1_CTRLA = 0;
 		while (DMA_CH1_CTRLA & DMA_CH_ENABLE_bm)
 		{
@@ -267,6 +306,7 @@ void usb_ep3_in_trnif()
 			else
 			{
 				USARTC1_CTRLA = USART_RXCINTLVL_MED_gc;
+				tin_transfer_active = false;
 
 				// There's no need to update tin_rdptr or tin_wrptr,
 				// we're going to idle and no buffer is busy.
@@ -303,7 +343,7 @@ void usb_ep3_in_trnif()
 		avrlib_atomic_clear(&ep_descs->tunnel_in.STATUS, USB_EP_BUSNACK0_bm);
 	}
 
-	if (restart_dma)
+	if (tin_enabled && restart_dma)
 	{
 		// The DMA transfer was inactive, but we have an idle buffer,
 		// restart DMA into it.
