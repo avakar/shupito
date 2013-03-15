@@ -73,7 +73,7 @@ void usb_yb_writer::send_sync(uint8_t cmd, uint8_t const * data, uint8_t size)
 }
 
 app::app()
-	: m_handler_avricsp(spi, clock, g_process), m_handler_pdi(pdi, clock, g_process)
+	: m_handler_avricsp(spi, clock, g_process), m_handler_pdi(pdi, clock, g_process), m_handler_spi(spi)
 {
 }
 

@@ -25,6 +25,9 @@ bool app::handle_packet(uint8_t cmd, uint8_t const * cp, uint8_t size, yb_writer
 				case 1:
 					err = this->select_handler(&m_handler_pdi);
 					break;
+				case 2:
+					err = this->select_handler(&m_handler_spi);
+					break;
 				}
 			}
 

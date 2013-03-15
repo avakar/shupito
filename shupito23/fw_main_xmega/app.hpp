@@ -16,6 +16,7 @@
 #include "../../fw_common/handler_base.hpp"
 #include "../../fw_common/handler_xmega.hpp"
 #include "../../fw_common/handler_avricsp.hpp"
+#include "../../fw_common/handler_spi.hpp"
 
 typedef pdi_t<clock_t, pin_aux_rst, pin_pdi, led_holder> my_pdi_t;
 
@@ -98,6 +99,7 @@ private:
 
 	handler_avricsp<spi_t, clock_t, pin_rst, process_t> m_handler_avricsp;
 	handler_xmega<my_pdi_t, clock_t, process_t> m_handler_pdi;
+	handler_spi<spi_t, pin_aux_rst> m_handler_spi;
 	handler_base * m_handler;
 
 	bool m_tunnel_open;

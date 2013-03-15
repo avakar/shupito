@@ -33,7 +33,7 @@ struct handler_base
 
 	virtual error_t select() { return 0; }
 	virtual void unselect() {}
-	virtual bool handle_command(uint8_t cmd, uint8_t const * cp, uint8_t size, com_t & com) { return false; }
+	virtual bool handle_command(uint8_t cmd, uint8_t const * cp, uint8_t size, com_t & com) { AVRLIB_ASSERT(0); return false; }
 	virtual void process_selected() {}
 };
 
