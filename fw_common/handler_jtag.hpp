@@ -11,22 +11,25 @@ struct handler_jtagg
 	typedef PinClk pin_tck;
 	typedef PinRx  pin_tdo;
 	typedef PinTx  pin_tdi;
+	typedef typename Process::led led;
 
 	handler_jtagg(Process process = Process())
 		: m_process(process)
 	{
 	}
 
-	bool handle_command(avrlib::command_parser & cp, com_t & com)
+	bool handle_command(uint8_t cmd, uint8_t const * cp, uint8_t size, com_t & com)
 	{
-		switch (cp.command())
+		switch (cmd)
 		{
 		case 1: // STATE 8'length length'state_path
-			if (cp.size() >= 1)
+			if (size >= 1)
 			{
 				uint8_t length = cp[0];
-				if (cp.size() >= (length + 15) / 8)
+				if (size == (length + 15) / 8)
 				{
+					led l;
+
 					tick();
 					for (uint8_t i = 1; length != 0; ++i)
 					{
@@ -50,11 +53,13 @@ struct handler_jtagg
 			}
 			return true;
 		case 2: // SHIFT 8'length length'data
-			if (cp.size() > 1 && cp[0] <= 8*14)
+			if (size > 1 && (cp[0] + 15) / 8 == size)
 			{
+				led l;
+
 				uint8_t length = cp[0];
 
-				uint8_t * wbuf = com.alloc(2, cp.size());
+				uint8_t * wbuf = com.alloc(2, size);
 				if (!wbuf)
 					return false;
 
@@ -112,13 +117,15 @@ struct handler_jtagg
 			}
 			return true;
 		case 4: // CLOCK 32'ticks
-			if (cp.size() >= 4)
+			if (size >= 4)
 			{
+				led l;
+
 				uint32_t clocks = cp[0]
 					| (uint32_t(cp[1]) << 8)
 					| (uint32_t(cp[2]) << 16)
 					| (uint32_t(cp[3]) << 24);
-				while (clocks != 0)
+				do
 				{
 					uint16_t chunk = clocks > 2000? 2000: clocks;
 					clocks -= chunk;
@@ -129,9 +136,9 @@ struct handler_jtagg
 						tock();
 					}
 
-					uint8_t last = clocks == 0;
-					com.send_sync(4, &last, 1);
+					com.send_sync(4, (uint8_t const *)&clocks, 4);
 				}
+				while (clocks != 0);
 			}
 			return true;
 		}
@@ -141,6 +148,7 @@ struct handler_jtagg
 
 	handler_base::error_t select()
 	{
+		m_process.disallow_tunnel();
 		pin_tms::make_high();
 		pin_tck::make_low();
 		return 0;
@@ -150,6 +158,7 @@ struct handler_jtagg
 	{
 		pin_tck::make_input();
 		pin_tms::make_input();
+		m_process.allow_tunnel();
 	}
 
 	void process_selected()
@@ -194,20 +203,6 @@ private:
 	{
 		clock_wait();
 		pin_tck::set_low();
-	}
-
-	template <typename Pin>
-	static void write(bool out, bool value)
-	{
-		if (!out)
-			Pin::make_input();
-		else
-		{
-			if (out)
-				Pin::make_high();
-			else
-				Pin::make_low();
-		}
 	}
 
 	Process m_process;

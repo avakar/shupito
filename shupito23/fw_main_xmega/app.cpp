@@ -437,6 +437,16 @@ void app::disallow_tunnel()
 	m_tunnel_allowed = false;
 }
 
+void process_t::allow_tunnel()
+{
+	g_app.allow_tunnel();
+}
+
+void process_t::disallow_tunnel()
+{
+	g_app.disallow_tunnel();
+}
+
 void process_t::operator()() const
 {
 	led_process();

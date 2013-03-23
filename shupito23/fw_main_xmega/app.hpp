@@ -17,6 +17,7 @@
 #include "../../fw_common/handler_xmega.hpp"
 #include "../../fw_common/handler_avricsp.hpp"
 #include "../../fw_common/handler_spi.hpp"
+#include "../../fw_common/handler_jtag.hpp"
 
 typedef pdi_t<clock_t, pin_aux_rst, pin_pdi, led_holder> my_pdi_t;
 
@@ -38,6 +39,18 @@ static uint8_t const sn_calib_indexes_count = sizeof sn_calib_indexes / sizeof s
 
 struct process_t
 {
+	struct led
+	{
+		led()
+		{
+			h.on();
+		}
+
+		led_holder h;
+	};
+
+	void allow_tunnel();
+	void disallow_tunnel();
 	void operator()() const;
 };
 
@@ -100,6 +113,7 @@ private:
 	handler_avricsp<spi_t, clock_t, pin_rst, process_t> m_handler_avricsp;
 	handler_xmega<my_pdi_t, clock_t, process_t> m_handler_pdi;
 	handler_spi<spi_t, pin_aux_rst> m_handler_spi;
+	handler_jtagg<pin_aux_rst, pin_xck, pin_rxd, pin_txd, process_t> m_handler_jtag;
 	handler_base * m_handler;
 
 	bool m_tunnel_open;

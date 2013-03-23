@@ -31,7 +31,12 @@ yb_desc = make_yb_desc(UUID('093d7f33-cdc6-4928-955d-513d17a85358'),
                     1,
                     (1<<12)
                     )
-                )
+                ),
+            Config(UUID('ee047e35-dec8-48ab-b194-e3762c8f6b66'), 1, 4,  # JTAG
+                data=struct.pack('<BII',
+                    1,
+                    32000000,
+                    2000000))
             ),
         Config(UUID('1d4738a0-fc34-4f71-aa73-57881b278cb1'), 10, 1, flags=0x03,  # measurement
             data=struct.pack('<BI',
