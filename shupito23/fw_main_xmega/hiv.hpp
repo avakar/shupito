@@ -9,6 +9,9 @@ void hiv_process();
 void hiv_enable();
 void hiv_disable();
 
+void hiv_allow();
+void hiv_disallow();
+
 void hiv_setpoint_recip(uint32_t v);
 
 uint8_t hiv_get_voltage();

@@ -2,7 +2,9 @@
 #include <avr/io.h>
 #include "clock.hpp"
 #include "../../fw_common/avrlib/stopwatch.hpp"
+#include "../../fw_common/avrlib/assert.hpp"
 
+static bool g_allowed;
 static bool g_enabled;
 static uint8_t g_cur_voltage;
 static uint16_t g_per;
@@ -29,6 +31,7 @@ void hiv_init()
 	g_timeout.init(clock, clock_t::us<1000>::value);
 	g_setpoint_recip = 0x1b7c6;
 	g_enabled = false;
+	g_allowed = true;
 }
 
 extern "C" uint16_t hiv_compute_per(uint16_t old_per, uint8_t cur_voltage, uint32_t setpoint_recip);
@@ -72,15 +75,31 @@ void hiv_process()
 
 void hiv_enable()
 {
+	AVRLIB_ASSERT(g_allowed);
 	TCD0_CTRLB |= TC0_CCDEN_bm;
 	g_enabled = true;
 }
 
 void hiv_disable()
 {
+	AVRLIB_ASSERT(g_allowed);
 	TCD0_CTRLB &= ~TC0_CCDEN_bm;
 	TCD0_PERBUF = max_per;
 	g_enabled = false;
+}
+
+void hiv_allow()
+{
+	AVRLIB_ASSERT(!g_allowed);
+	AVRLIB_ASSERT(!g_enabled);
+	g_allowed = true;
+}
+
+void hiv_disallow()
+{
+	AVRLIB_ASSERT(!g_enabled);
+	AVRLIB_ASSERT(g_allowed);
+	g_allowed = false;
 }
 
 void hiv_setpoint_recip(uint32_t v)

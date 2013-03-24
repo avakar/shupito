@@ -16,7 +16,6 @@ bool handler_jtag_fast::handle_command(uint8_t cmd, uint8_t const * cp, uint8_t 
 			uint8_t length = cp[0];
 			if (size == (length + 15) / 8)
 			{
-				// XXX: take ownership of hiv
 				uint8_t templ = PORTC_OUT & ~pin_tms::value_pin::bm;
 
 				uint8_t const * p = cp + 1;
@@ -75,7 +74,6 @@ bool handler_jtag_fast::handle_command(uint8_t cmd, uint8_t const * cp, uint8_t 
 				uint8_t block_length = length > 248? 248: length;
 				length -= block_length;
 
-				// XXX: take ownership of hiv
 				uint8_t templ = PORTC_OUT & ~(pin_tms::value_pin::bm | pin_tdi::value_pin::bm);
 				uint8_t * buf = g_jtag_out_buffer;
 
@@ -251,6 +249,28 @@ bool handler_jtag_fast::handle_command(uint8_t cmd, uint8_t const * cp, uint8_t 
 			com.send_sync(4, &err, 1);
 		}
 		return true;
+
+	case 5: // TRST 2'reset_mode
+		{
+			switch (cp[0] & 0x03)
+			{
+			case 0: // ON
+				pin_rst::make_high();
+				break;
+			case 1: // OFF
+				pin_rst::make_low();
+				break;
+			default: // Z or ABSENT
+				pin_rst::make_input();
+			}
+
+			while (!pin_rst::ready())
+				g_process();
+
+			uint8_t err = 0;
+			com.send_sync(5, &err, 1);
+		}
+		return true;
 	}
 
 	return false;
@@ -260,6 +280,7 @@ handler_base::error_t handler_jtag_fast::select()
 {
 	m_timer_running = false;
 
+	hiv_disallow();
 	g_app.disallow_tunnel();
 	pin_tms::make_high();
 	pin_tck::make_low();
@@ -300,6 +321,8 @@ handler_base::error_t handler_jtag_fast::select()
 
 void handler_jtag_fast::unselect()
 {
+	pin_rst::make_input();
+
 	TCC0_CCDBUF = 0;
 	TCC0_INTFLAGS = TC0_OVFIF_bm;
 	while ((TCC0_INTFLAGS & TC0_OVFIF_bm) == 0)
@@ -309,4 +332,8 @@ void handler_jtag_fast::unselect()
 	pin_tms::make_input();
 	pin_tck::make_input();
 	g_app.allow_tunnel();
+
+	while (!pin_rst::ready())
+		g_process();
+	hiv_allow();
 }
