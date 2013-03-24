@@ -1,9 +1,195 @@
 #include "handler_jtag_fast.hpp"
 #include "led.hpp"
 #include "app.hpp"
+#include "pins.hpp"
 
-static uint8_t g_jtag_out_buffer[255 + 3];
-static uint8_t g_jtag_in_buffer[255 + 3];
+typedef pin_aux_rst pin_tms;
+typedef pin_pdi pin_tck;
+typedef pin_rxd pin_tdo;
+typedef pin_txd pin_tdi;
+
+static uint8_t do_state(uint8_t cmd, uint8_t const * cp, uint8_t size, yb_writer & com)
+{
+	if (size < 1)
+		return 1;
+
+	uint8_t length = cp[0];
+	if (size != (length + 15) / 8)
+		return 1;
+
+	uint8_t jtag_out_buffer[255 + 3];
+	uint8_t templ = PORTC_OUT & ~pin_tms::value_pin::bm;
+
+	uint8_t const * p = cp + 1;
+	uint8_t i = 0;
+	while (length)
+	{
+		uint8_t chunk = length;
+		if (chunk > 8)
+		chunk = 8;
+		length -= chunk;
+
+		uint8_t v = *p++;
+		for (; chunk; --chunk)
+		{
+			jtag_out_buffer[i++] = (v & 1)? templ | pin_tms::value_pin::bm: templ;
+			v >>= 1;
+		}
+	}
+
+	led_holder l(true);
+
+	uint16_t srcaddr = (uint16_t)jtag_out_buffer;
+	DMA_CH2_SRCADDR0 = srcaddr;
+	DMA_CH2_SRCADDR1 = srcaddr >> 8;
+	DMA_CH2_SRCADDR2 = 0;
+
+	DMA_CH2_TRFCNT = i;
+	DMA_CH2_CTRLA = DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+	DMA_CH2_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+	while (DMA_CH2_CTRLA & DMA_CH_ENABLE_bm)
+		g_process();
+
+	return 0;
+}
+
+static bool do_shift(uint8_t cmd, uint8_t const * cp, uint8_t size, yb_writer & com)
+{
+	uint8_t err = 1;
+	if (size == 1 && (cp[0] & 0x07) == 0)
+		err = 0;
+
+	if (size <= 1)
+	{
+		com.send_sync(2, &err, 1);
+		return true;
+	}
+
+	bool verify = (cp[0] & 0x10) == 0;
+
+	uint8_t * wbuf = com.alloc(2, verify? size: 1);
+	if (!wbuf)
+		return false;
+
+	uint16_t length = (size - 1) * 8;
+	uint8_t mod = cp[0] & 0x07;
+	if (mod)
+		length = length - 8 + mod;
+
+	uint8_t jtag_out_buffer[255 + 3];
+	uint8_t jtag_in_buffer[255 + 3];
+
+	uint8_t const * out_data = cp + 1;
+
+	*wbuf++ = 0;
+	while (length)
+	{
+		uint8_t block_length = length > 248? 248: length;
+		length -= block_length;
+
+		uint8_t templ = PORTC_OUT & ~(pin_tms::value_pin::bm | pin_tdi::value_pin::bm);
+		uint8_t * buf = jtag_out_buffer;
+
+		// PAUSE ->1 EXIT2 ->0 SHIFT
+		*buf++ = templ | pin_tms::value_pin::bm | pin_tdi::value_pin::bm;
+		*buf++ = templ;
+
+		uint8_t remaining_length = block_length;
+		while (remaining_length)
+		{
+			uint8_t chunk = remaining_length >= 8? 8: remaining_length;
+			remaining_length -= chunk;
+
+			uint8_t v = *out_data++;
+			for (; chunk; --chunk)
+			{
+				*buf++ = (v & 1)? templ | pin_tdi::value_pin::bm: templ;
+				v >>= 1;
+			}
+		}
+
+		// (SHIFT ->1) EXIT1 ->0 PAUSE
+		buf[-1] |= pin_tms::value_pin::bm;
+		*buf++ = templ | pin_tdi::value_pin::bm;
+
+		uint16_t buf_len = buf - jtag_out_buffer;
+
+		led_holder l(true);
+
+		pin_tdi::make_high();
+
+		uint16_t srcaddr = (uint16_t)jtag_out_buffer;
+		DMA_CH2_SRCADDR0 = srcaddr;
+		DMA_CH2_SRCADDR1 = srcaddr >> 8;
+		DMA_CH2_SRCADDR2 = 0;
+
+		DMA_CH2_TRFCNT = buf_len;
+		DMA_CH2_CTRLA = DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+
+		if (verify)
+		{
+			uint16_t destaddr = (uint16_t)jtag_in_buffer;
+			DMA_CH3_DESTADDR0 = destaddr;
+			DMA_CH3_DESTADDR1 = destaddr >> 8;
+			DMA_CH3_DESTADDR2 = 0;
+
+			DMA_CH3_TRFCNT = buf_len;
+			DMA_CH3_CTRLA = DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+
+			cli();
+			DMA_CH2_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+			DMA_CH3_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+			sei();
+
+			while ((DMA_CH2_CTRLA & DMA_CH_ENABLE_bm) != 0
+			|| (DMA_CH3_CTRLA & DMA_CH_ENABLE_bm) != 0)
+			{
+				g_process();
+			}
+		}
+		else
+		{
+			DMA_CH2_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+			while ((DMA_CH2_CTRLA & DMA_CH_ENABLE_bm) != 0)
+			g_process();
+		}
+
+		pin_tdi::make_input();
+
+		if (verify)
+		{
+			uint8_t offset = 0;
+			for (; offset < 2; ++offset)
+			{
+				if ((jtag_in_buffer[offset] & pin_tdi::value_pin::bm) == 0)
+				break;
+			}
+
+			if (offset == 3)
+			wbuf[-1] = 3;
+
+			uint8_t * in_data = jtag_in_buffer + offset + 1;
+			remaining_length = block_length;
+			while (remaining_length)
+			{
+				uint8_t chunk = remaining_length >= 8? 8: remaining_length;
+				remaining_length -= chunk;
+
+				uint8_t v = 0;
+				for (; chunk; --chunk)
+				{
+					v >>= 1;
+					v |= (*in_data++ & pin_tdo::bm)? 0x80: 0;
+				}
+
+				*wbuf++ = v;
+			}
+		}
+	}
+
+	com.commit();
+	return true;
+}
 
 bool handler_jtag_fast::handle_command(uint8_t cmd, uint8_t const * cp, uint8_t size, com_t & com)
 {
@@ -11,165 +197,13 @@ bool handler_jtag_fast::handle_command(uint8_t cmd, uint8_t const * cp, uint8_t 
 	switch (cmd)
 	{
 	case 1: // STATE 8'length length'state_path
-		if (size >= 1)
-		{
-			uint8_t length = cp[0];
-			if (size == (length + 15) / 8)
-			{
-				uint8_t templ = PORTC_OUT & ~pin_tms::value_pin::bm;
-
-				uint8_t const * p = cp + 1;
-				uint8_t i = 0;
-				while (length)
-				{
-					uint8_t chunk = length;
-					if (chunk > 8)
-						chunk = 8;
-					length -= chunk;
-
-					uint8_t v = *p++;
-					for (; chunk; --chunk)
-					{
-						g_jtag_out_buffer[i++] = (v & 1)? templ | pin_tms::value_pin::bm: templ;
-						v >>= 1;
-					}
-				}
-
-				led_holder l(true);
-
-				DMA_CH2_TRFCNT = i;
-				DMA_CH2_CTRLA = DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
-				DMA_CH2_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
-				while (DMA_CH2_CTRLA & DMA_CH_ENABLE_bm)
-				{
-					g_process();
-				}
-
-				err = 0;
-			}
-		}
-
+		err = do_state(cmd, cp, size, com);
 		com.send_sync(1, &err, 1);
 		return true;
 
 	case 2: // SHIFT 3'length 5'flags length'data
-		if (size > 1)
-		{
-			bool verify = (cp[0] & 0x10) == 0;
+		return do_shift(cmd, cp, size, com);
 
-			uint8_t * wbuf = com.alloc(2, verify? size: 1);
-			if (!wbuf)
-				return false;
-
-			uint16_t length = (size - 1) * 8;
-			uint8_t mod = cp[0] & 0x07;
-			if (mod)
-				length = length - 8 + mod;
-
-			uint8_t const * out_data = cp + 1;
-
-			*wbuf++ = 0;
-			while (length)
-			{
-				uint8_t block_length = length > 248? 248: length;
-				length -= block_length;
-
-				uint8_t templ = PORTC_OUT & ~(pin_tms::value_pin::bm | pin_tdi::value_pin::bm);
-				uint8_t * buf = g_jtag_out_buffer;
-
-				// PAUSE ->1 EXIT2 ->0 SHIFT
-				*buf++ = templ | pin_tms::value_pin::bm | pin_tdi::value_pin::bm;
-				*buf++ = templ;
-
-				uint8_t remaining_length = block_length;
-				while (remaining_length)
-				{
-					uint8_t chunk = remaining_length >= 8? 8: remaining_length;
-					remaining_length -= chunk;
-
-					uint8_t v = *out_data++;
-					for (; chunk; --chunk)
-					{
-						*buf++ = (v & 1)? templ | pin_tdi::value_pin::bm: templ;
-						v >>= 1;
-					}
-				}
-
-				// (SHIFT ->1) EXIT1 ->0 PAUSE
-				buf[-1] |= pin_tms::value_pin::bm;
-				*buf++ = templ | pin_tdi::value_pin::bm;
-
-				uint16_t buf_len = buf - g_jtag_out_buffer;
-
-				led_holder l(true);
-
-				pin_tdi::make_high();
-				DMA_CH2_TRFCNT = buf_len;
-				DMA_CH2_CTRLA = DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
-
-				if (verify)
-				{
-					DMA_CH3_TRFCNT = buf_len;
-					DMA_CH3_CTRLA = DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
-
-					cli();
-					DMA_CH2_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
-					DMA_CH3_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
-					sei();
-
-					while ((DMA_CH2_CTRLA & DMA_CH_ENABLE_bm) != 0
-						|| (DMA_CH3_CTRLA & DMA_CH_ENABLE_bm) != 0)
-					{
-						g_process();
-					}
-				}
-				else
-				{
-					DMA_CH2_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
-					while ((DMA_CH2_CTRLA & DMA_CH_ENABLE_bm) != 0)
-						g_process();
-				}
-
-				pin_tdi::make_input();
-
-				if (verify)
-				{
-					uint8_t offset = 0;
-					for (; offset < 2; ++offset)
-					{
-						if ((g_jtag_in_buffer[offset] & pin_tdi::value_pin::bm) == 0)
-							break;
-					}
-
-					if (offset == 3)
-						wbuf[-1] = 3;
-
-					uint8_t * in_data = g_jtag_in_buffer + offset + 1;
-					remaining_length = block_length;
-					while (remaining_length)
-					{
-						uint8_t chunk = remaining_length >= 8? 8: remaining_length;
-						remaining_length -= chunk;
-
-						uint8_t v = 0;
-						for (; chunk; --chunk)
-						{
-							v >>= 1;
-							v |= (*in_data++ & pin_tdo::bm)? 0x80: 0;
-						}
-
-						*wbuf++ = v;
-					}
-				}
-			}
-
-			com.commit();
-		}
-		else
-		{
-			com.send_sync(1, &err, 1);
-		}
-		return true;
 	case 3: // FREQUENCY 32'wait_time
 		{
 			uint16_t per = cp[0] | (cp[1] << 8);
@@ -293,11 +327,6 @@ handler_base::error_t handler_jtag_fast::select()
 	DMA_CH2_TRIGSRC = DMA_CH_TRIGSRC_EVSYS_CH0_gc;
 	DMA_CH2_ADDRCTRL = DMA_CH_SRCRELOAD_TRANSACTION_gc | DMA_CH_SRCDIR_INC_gc | DMA_CH_DESTRELOAD_NONE_gc | DMA_CH_DESTDIR_FIXED_gc;
 
-	uint16_t srcaddr = (uint16_t)g_jtag_out_buffer;
-	DMA_CH2_SRCADDR0 = srcaddr;
-	DMA_CH2_SRCADDR1 = srcaddr >> 8;
-	DMA_CH2_SRCADDR2 = 0;
-
 	uint16_t destaddr = (uint16_t)&PORTC_OUT;
 	DMA_CH2_DESTADDR0 = destaddr;
 	DMA_CH2_DESTADDR1 = destaddr >> 8;
@@ -306,15 +335,10 @@ handler_base::error_t handler_jtag_fast::select()
 	DMA_CH3_TRIGSRC = DMA_CH_TRIGSRC_EVSYS_CH1_gc;
 	DMA_CH3_ADDRCTRL = DMA_CH_SRCRELOAD_NONE_gc | DMA_CH_SRCDIR_FIXED_gc | DMA_CH_DESTRELOAD_TRANSACTION_gc | DMA_CH_DESTDIR_INC_gc;
 
-	srcaddr = (uint16_t)&PORTC_IN;
+	uint16_t srcaddr = (uint16_t)&PORTC_IN;
 	DMA_CH3_SRCADDR0 = srcaddr;
 	DMA_CH3_SRCADDR1 = srcaddr >> 8;
 	DMA_CH3_SRCADDR2 = 0;
-
-	destaddr = (uint16_t)g_jtag_in_buffer;
-	DMA_CH3_DESTADDR0 = destaddr;
-	DMA_CH3_DESTADDR1 = destaddr >> 8;
-	DMA_CH3_DESTADDR2 = 0;
 
 	return 0;
 }
