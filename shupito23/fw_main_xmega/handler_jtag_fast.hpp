@@ -15,7 +15,9 @@ struct handler_jtag_fast
 	bool handle_command(uint8_t cmd, uint8_t const * cp, uint8_t size, com_t & com);
 	handler_base::error_t select();
 	void unselect();
-	void process_selected();
+
+private:
+	bool m_timer_running;
 };
 
 #endif
