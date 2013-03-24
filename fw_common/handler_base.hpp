@@ -2,6 +2,7 @@
 #define SHUPITO_FIRMWARE_HANDLER_BASE_HPP
 
 #include "avrlib/command_parser.hpp"
+#include "avrlib/assert.hpp"
 
 class yb_writer
 {
