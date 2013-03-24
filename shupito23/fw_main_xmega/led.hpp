@@ -13,9 +13,11 @@ void led_blink_long();
 class led_holder
 {
 public:
-	led_holder()
+	led_holder(bool enable = false)
 		: m_on(false)
 	{
+		if (enable)
+			this->on();
 	}
 
 	~led_holder()

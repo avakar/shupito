@@ -85,6 +85,12 @@ $(MSBuildProjectDirectory)\generate_baudctrls.py &gt; $(MSBuildProjectDirectory)
     <Compile Include="dbg.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="handler_jtag_fast.cpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="handler_jtag_fast.hpp">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="hiv.cpp">
       <SubType>compile</SubType>
     </Compile>

@@ -117,7 +117,7 @@ void app::init()
 	NVM_CMD = NVM_CMD_NO_OPERATION_gc;
 
 	// Disable unused peripherals to decrease power consumption and noise
-	PR_PRGEN = PR_AES_bm | PR_EBI_bm | PR_RTC_bm | PR_EVSYS_bm;
+	PR_PRGEN = PR_AES_bm | PR_EBI_bm | PR_RTC_bm;
 	PR_PRPA = PR_DAC_bm | PR_AC_bm;
 	PR_PRPB = PR_DAC_bm | PR_AC_bm;
 	PR_PRPC = PR_TWI_bm | PR_HIRES_bm;
@@ -165,6 +165,9 @@ void app::init()
 
 	// Start the conversion immediately
 	ADCA_CH0_CTRL |= ADC_CH_START_bm;
+
+	// Prepare the DMA controller
+	DMA_CTRL = DMA_ENABLE_bm;
 
 	usb_init(m_usb_sn, sizeof m_usb_sn, g_namedesc);
 

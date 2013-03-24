@@ -16,7 +16,6 @@ static void usb_out_tunnel_poll();
 
 void usb_tunnel_config()
 {
-	DMA_CTRL = DMA_ENABLE_bm;
 	usb_out_tunnel_config();
 	usb_in_tunnel_config();
 }
@@ -24,7 +23,6 @@ void usb_tunnel_config()
 void usb_tunnel_deconfig()
 {
 	usb_out_tunnel_deconfig();
-	DMA_CTRL = 0;
 }
 
 void usb_tunnel_poll()
