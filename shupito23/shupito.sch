@@ -8841,7 +8841,7 @@ In this library the device names are the same as the pin names of the symbols, t
 <part name="JP8" library="pinhead_smd" deviceset="PINH1X01" device="SMD"/>
 <part name="JP9" library="pinhead_smd" deviceset="PINH1X01" device="SMD"/>
 <part name="JP10" library="pinhead_smd" deviceset="PINH1X01" device="SMD"/>
-<part name="C3" library="rcl" deviceset="C-EU" device="C0603K" value="2.2u-1759473"/>
+<part name="C3" library="rcl" deviceset="C-EU" device="C0603K" value="2.2u"/>
 <part name="S1" library="switch" deviceset="KSS" device="G" technology="241"/>
 <part name="GND8" library="supply1" deviceset="GND" device=""/>
 <part name="SUPPLY3" library="supply2" deviceset="GND2" device=""/>
