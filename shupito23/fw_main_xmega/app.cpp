@@ -167,7 +167,7 @@ void app::init()
 	ADCA_CH0_CTRL |= ADC_CH_START_bm;
 
 	// Prepare the DMA controller
-	DMA_CTRL = DMA_ENABLE_bm;
+	DMA_CTRL = DMA_ENABLE_bm | DMA_PRIMODE_CH01RR23_gc;
 
 	usb_init(m_usb_sn, sizeof m_usb_sn, g_namedesc);
 

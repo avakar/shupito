@@ -40,14 +40,14 @@ static uint8_t do_state(uint8_t cmd, uint8_t const * cp, uint8_t size, yb_writer
 	led_holder l(true);
 
 	uint16_t srcaddr = (uint16_t)jtag_out_buffer;
-	DMA_CH2_SRCADDR0 = srcaddr;
-	DMA_CH2_SRCADDR1 = srcaddr >> 8;
-	DMA_CH2_SRCADDR2 = 0;
+	DMA_CH1_SRCADDR0 = srcaddr;
+	DMA_CH1_SRCADDR1 = srcaddr >> 8;
+	DMA_CH1_SRCADDR2 = 0;
 
-	DMA_CH2_TRFCNT = i;
-	DMA_CH2_CTRLA = DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
-	DMA_CH2_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
-	while (DMA_CH2_CTRLA & DMA_CH_ENABLE_bm)
+	DMA_CH1_TRFCNT = i;
+	DMA_CH1_CTRLA = DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+	DMA_CH1_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+	while (DMA_CH1_CTRLA & DMA_CH_ENABLE_bm)
 		g_process();
 
 	return 0;
@@ -119,38 +119,38 @@ static bool do_shift(uint8_t cmd, uint8_t const * cp, uint8_t size, yb_writer & 
 		pin_tdi::make_high();
 
 		uint16_t srcaddr = (uint16_t)jtag_out_buffer;
-		DMA_CH2_SRCADDR0 = srcaddr;
-		DMA_CH2_SRCADDR1 = srcaddr >> 8;
-		DMA_CH2_SRCADDR2 = 0;
+		DMA_CH1_SRCADDR0 = srcaddr;
+		DMA_CH1_SRCADDR1 = srcaddr >> 8;
+		DMA_CH1_SRCADDR2 = 0;
 
-		DMA_CH2_TRFCNT = buf_len;
-		DMA_CH2_CTRLA = DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+		DMA_CH1_TRFCNT = buf_len;
+		DMA_CH1_CTRLA = DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
 
 		if (verify)
 		{
 			uint16_t destaddr = (uint16_t)jtag_in_buffer;
-			DMA_CH3_DESTADDR0 = destaddr;
-			DMA_CH3_DESTADDR1 = destaddr >> 8;
-			DMA_CH3_DESTADDR2 = 0;
+			DMA_CH0_DESTADDR0 = destaddr;
+			DMA_CH0_DESTADDR1 = destaddr >> 8;
+			DMA_CH0_DESTADDR2 = 0;
 
-			DMA_CH3_TRFCNT = buf_len;
-			DMA_CH3_CTRLA = DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+			DMA_CH0_TRFCNT = buf_len;
+			DMA_CH0_CTRLA = DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
 
 			cli();
-			DMA_CH2_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
-			DMA_CH3_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+			DMA_CH1_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+			DMA_CH0_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
 			sei();
 
-			while ((DMA_CH2_CTRLA & DMA_CH_ENABLE_bm) != 0
-			|| (DMA_CH3_CTRLA & DMA_CH_ENABLE_bm) != 0)
+			while ((DMA_CH1_CTRLA & DMA_CH_ENABLE_bm) != 0
+			|| (DMA_CH0_CTRLA & DMA_CH_ENABLE_bm) != 0)
 			{
 				g_process();
 			}
 		}
 		else
 		{
-			DMA_CH2_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
-			while ((DMA_CH2_CTRLA & DMA_CH_ENABLE_bm) != 0)
+			DMA_CH1_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+			while ((DMA_CH1_CTRLA & DMA_CH_ENABLE_bm) != 0)
 			g_process();
 		}
 
@@ -324,21 +324,21 @@ handler_base::error_t handler_jtag_fast::select()
 	EVSYS_CH1MUX = EVSYS_CHMUX_TCC0_OVF_gc;
 	EVSYS_CH1CTRL = 0;
 
-	DMA_CH2_TRIGSRC = DMA_CH_TRIGSRC_EVSYS_CH0_gc;
-	DMA_CH2_ADDRCTRL = DMA_CH_SRCRELOAD_TRANSACTION_gc | DMA_CH_SRCDIR_INC_gc | DMA_CH_DESTRELOAD_NONE_gc | DMA_CH_DESTDIR_FIXED_gc;
+	DMA_CH1_TRIGSRC = DMA_CH_TRIGSRC_EVSYS_CH0_gc;
+	DMA_CH1_ADDRCTRL = DMA_CH_SRCRELOAD_TRANSACTION_gc | DMA_CH_SRCDIR_INC_gc | DMA_CH_DESTRELOAD_NONE_gc | DMA_CH_DESTDIR_FIXED_gc;
 
 	uint16_t destaddr = (uint16_t)&PORTC_OUT;
-	DMA_CH2_DESTADDR0 = destaddr;
-	DMA_CH2_DESTADDR1 = destaddr >> 8;
-	DMA_CH2_DESTADDR2 = 0;
+	DMA_CH1_DESTADDR0 = destaddr;
+	DMA_CH1_DESTADDR1 = destaddr >> 8;
+	DMA_CH1_DESTADDR2 = 0;
 
-	DMA_CH3_TRIGSRC = DMA_CH_TRIGSRC_EVSYS_CH1_gc;
-	DMA_CH3_ADDRCTRL = DMA_CH_SRCRELOAD_NONE_gc | DMA_CH_SRCDIR_FIXED_gc | DMA_CH_DESTRELOAD_TRANSACTION_gc | DMA_CH_DESTDIR_INC_gc;
+	DMA_CH0_TRIGSRC = DMA_CH_TRIGSRC_EVSYS_CH1_gc;
+	DMA_CH0_ADDRCTRL = DMA_CH_SRCRELOAD_NONE_gc | DMA_CH_SRCDIR_FIXED_gc | DMA_CH_DESTRELOAD_TRANSACTION_gc | DMA_CH_DESTDIR_INC_gc;
 
 	uint16_t srcaddr = (uint16_t)&PORTC_IN;
-	DMA_CH3_SRCADDR0 = srcaddr;
-	DMA_CH3_SRCADDR1 = srcaddr >> 8;
-	DMA_CH3_SRCADDR2 = 0;
+	DMA_CH0_SRCADDR0 = srcaddr;
+	DMA_CH0_SRCADDR1 = srcaddr >> 8;
+	DMA_CH0_SRCADDR2 = 0;
 
 	return 0;
 }

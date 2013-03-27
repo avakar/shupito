@@ -66,23 +66,23 @@ static void usb_out_tunnel_config()
 
 	// Setup the DMA channel to transfer from the USB EP3OUT to the USART C1
 	// data register whenever the register becomes ready
-	DMA_CH0_DESTADDR0 = (uint8_t)(uint16_t)&USARTC1_DATA;
-	DMA_CH0_DESTADDR1 = (uint16_t)&USARTC1_DATA >> 8;
-	DMA_CH0_DESTADDR2 = 0;
+	DMA_CH2_DESTADDR0 = (uint8_t)(uint16_t)&USARTC1_DATA;
+	DMA_CH2_DESTADDR1 = (uint16_t)&USARTC1_DATA >> 8;
+	DMA_CH2_DESTADDR2 = 0;
 
 	uint16_t buf_addr = (uint16_t)tout_buf;
-	DMA_CH0_SRCADDR0 = (uint8_t)buf_addr;
-	DMA_CH0_SRCADDR1 = (uint8_t)(buf_addr >> 8);
-	DMA_CH0_SRCADDR2 = 0;
+	DMA_CH2_SRCADDR0 = (uint8_t)buf_addr;
+	DMA_CH2_SRCADDR1 = (uint8_t)(buf_addr >> 8);
+	DMA_CH2_SRCADDR2 = 0;
 
-	DMA_CH0_ADDRCTRL = DMA_CH_SRCRELOAD_BLOCK_gc | DMA_CH_SRCDIR_INC_gc | DMA_CH_DESTRELOAD_NONE_gc | DMA_CH_DESTDIR_FIXED_gc;
-	DMA_CH0_TRIGSRC = DMA_CH_TRIGSRC_USARTC1_DRE_gc;
+	DMA_CH2_ADDRCTRL = DMA_CH_SRCRELOAD_BLOCK_gc | DMA_CH_SRCDIR_INC_gc | DMA_CH_DESTRELOAD_NONE_gc | DMA_CH_DESTDIR_FIXED_gc;
+	DMA_CH2_TRIGSRC = DMA_CH_TRIGSRC_USARTC1_DRE_gc;
 }
 
 static void usb_out_tunnel_deconfig()
 {
-	DMA_CH0_CTRLA = 0;
-	while (DMA_CH0_CTRLA & DMA_CH_ENABLE_bm)
+	DMA_CH2_CTRLA = 0;
+	while (DMA_CH2_CTRLA & DMA_CH_ENABLE_bm)
 	{
 	}
 }
@@ -92,12 +92,12 @@ static void usb_out_tunnel_poll()
 	if ((ep_descs->tunnel_out.STATUS & USB_EP_BUSNACK0_bm) && tout_state == tos_idle)
 	{
 		tout_state = tos_dma;
-		DMA_CH0_TRFCNT = ep_descs->tunnel_out.CNT;
-		DMA_CH0_CTRLB = DMA_CH_TRNIF_bm;
-		DMA_CH0_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+		DMA_CH2_TRFCNT = ep_descs->tunnel_out.CNT;
+		DMA_CH2_CTRLB = DMA_CH_TRNIF_bm;
+		DMA_CH2_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
 	}
 
-	if (tout_state == tos_dma && (DMA_CH0_CTRLB & DMA_CH_TRNIF_bm))
+	if (tout_state == tos_dma && (DMA_CH2_CTRLB & DMA_CH_TRNIF_bm))
 	{
 		tout_state = tos_idle;
 		avrlib_atomic_clear(&ep_descs->tunnel_out.STATUS, USB_EP_BUSNACK0_bm);
@@ -144,12 +144,12 @@ void usb_in_tunnel_config()
 	ep_descs->tunnel_in.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_PINGPONG_bm | USB_EP_BUFSIZE_64_gc;
 
 	uint16_t data_ptr = (uint16_t)&USARTC1_DATA;
-	DMA_CH1_SRCADDR0 = (uint8_t)data_ptr;
-	DMA_CH1_SRCADDR1 = (uint8_t)(data_ptr >> 8);
-	DMA_CH1_SRCADDR2 = 0;
+	DMA_CH3_SRCADDR0 = (uint8_t)data_ptr;
+	DMA_CH3_SRCADDR1 = (uint8_t)(data_ptr >> 8);
+	DMA_CH3_SRCADDR2 = 0;
 
-	DMA_CH1_TRIGSRC = DMA_CH_TRIGSRC_USARTC1_RXC_gc;
-	DMA_CH1_ADDRCTRL = DMA_CH_SRCRELOAD_NONE_gc | DMA_CH_SRCDIR_FIXED_gc | DMA_CH_DESTRELOAD_BLOCK_gc | DMA_CH_DESTDIR_INC_gc;
+	DMA_CH3_TRIGSRC = DMA_CH_TRIGSRC_USARTC1_RXC_gc;
+	DMA_CH3_ADDRCTRL = DMA_CH_SRCRELOAD_NONE_gc | DMA_CH_SRCDIR_FIXED_gc | DMA_CH_DESTRELOAD_BLOCK_gc | DMA_CH_DESTDIR_INC_gc;
 }
 
 void usb_in_tunnel_start()
@@ -164,12 +164,12 @@ void usb_in_tunnel_start()
 			if (tin_rdptr != wrptr)
 			{
 				uint16_t buf_addr = (uint16_t)tin_bufs[wrptr];
-				DMA_CH1_DESTADDR0 = (uint8_t)buf_addr;
-				DMA_CH1_DESTADDR1 = (uint8_t)(buf_addr >> 8);
-				DMA_CH1_DESTADDR2 = 0;
-				DMA_CH1_TRFCNT = tin_buf_size;
-				DMA_CH1_CTRLB = DMA_CH_TRNIF_bm | DMA_CH_TRNINTLVL_MED_gc;
-				DMA_CH1_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+				DMA_CH3_DESTADDR0 = (uint8_t)buf_addr;
+				DMA_CH3_DESTADDR1 = (uint8_t)(buf_addr >> 8);
+				DMA_CH3_DESTADDR2 = 0;
+				DMA_CH3_TRFCNT = tin_buf_size;
+				DMA_CH3_CTRLB = DMA_CH_TRNIF_bm | DMA_CH_TRNINTLVL_MED_gc;
+				DMA_CH3_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
 			}
 		}
 		else
@@ -184,12 +184,12 @@ void usb_in_tunnel_stop()
 {
 	cli();
 	USARTC1_CTRLA = 0;
-	DMA_CH1_CTRLB = 0;
+	DMA_CH3_CTRLB = 0;
 	tin_enabled = false;
 	sei();
 
-	DMA_CH1_CTRLA = 0;
-	while (DMA_CH1_CTRLA & DMA_CH_ENABLE_bm)
+	DMA_CH3_CTRLA = 0;
+	while (DMA_CH3_CTRLA & DMA_CH_ENABLE_bm)
 	{
 	}
 }
@@ -199,12 +199,12 @@ ISR(USARTC1_RXC_vect)
 	tin_bufs[0][0] = USARTC1_DATA;
 
 	uint16_t buf_addr = (uint16_t)tin_bufs[1];
-	DMA_CH1_DESTADDR0 = (uint8_t)buf_addr;
-	DMA_CH1_DESTADDR1 = (uint8_t)(buf_addr >> 8);
-	DMA_CH1_DESTADDR2 = 0;
-	DMA_CH1_TRFCNT = tin_buf_size;
-	DMA_CH1_CTRLB = DMA_CH_TRNIF_bm | DMA_CH_TRNINTLVL_MED_gc;
-	DMA_CH1_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+	DMA_CH3_DESTADDR0 = (uint8_t)buf_addr;
+	DMA_CH3_DESTADDR1 = (uint8_t)(buf_addr >> 8);
+	DMA_CH3_DESTADDR2 = 0;
+	DMA_CH3_TRFCNT = tin_buf_size;
+	DMA_CH3_CTRLB = DMA_CH_TRNIF_bm | DMA_CH_TRNINTLVL_MED_gc;
+	DMA_CH3_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
 
 	ep_descs->tunnel_in.CNT = 1;
 	ep_descs->tunnel_in.DATAPTR = (uint16_t)tin_bufs[0];
@@ -217,9 +217,9 @@ ISR(USARTC1_RXC_vect)
 	tin_transfer_active = true;
 }
 
-ISR(DMA_CH1_vect)
+ISR(DMA_CH3_vect)
 {
-	DMA_CH1_CTRLB = DMA_CH_TRNIF_bm | DMA_CH_TRNINTLVL_MED_gc;
+	DMA_CH3_CTRLB = DMA_CH_TRNIF_bm | DMA_CH_TRNINTLVL_MED_gc;
 
 	uint8_t wrptr = tin_wrptr;
 	uint8_t rdptr = tin_rdptr;
@@ -235,11 +235,11 @@ ISR(DMA_CH1_vect)
 		// The new wrptr is idle, start a DMA transaction into it.
 
 		uint16_t buf_addr = (uint16_t)tin_bufs[wrptr];
-		DMA_CH1_DESTADDR0 = (uint8_t)buf_addr;
-		DMA_CH1_DESTADDR1 = (uint8_t)(buf_addr >> 8);
-		DMA_CH1_DESTADDR2 = 0;
-		DMA_CH1_TRFCNT = tin_buf_size;
-		DMA_CH1_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+		DMA_CH3_DESTADDR0 = (uint8_t)buf_addr;
+		DMA_CH3_DESTADDR1 = (uint8_t)(buf_addr >> 8);
+		DMA_CH3_DESTADDR2 = 0;
+		DMA_CH3_TRFCNT = tin_buf_size;
+		DMA_CH3_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
 
 		if (((rdptr + 1) & (tin_buf_count - 1)) == curptr)
 		{
@@ -284,19 +284,19 @@ void usb_ep3_in_trnif()
 			return;
 		}
 
-		DMA_CH1_CTRLA = 0;
-		while (DMA_CH1_CTRLA & DMA_CH_ENABLE_bm)
+		DMA_CH3_CTRLA = 0;
+		while (DMA_CH3_CTRLA & DMA_CH_ENABLE_bm)
 		{
 		}
 
-		if (DMA_CH1_CTRLB & DMA_CH_TRNIF_bm)
+		if (DMA_CH3_CTRLB & DMA_CH_TRNIF_bm)
 		{
-			DMA_CH1_CTRLB = DMA_CH_TRNIF_bm | DMA_CH_TRNINTLVL_MED_gc;
+			DMA_CH3_CTRLB = DMA_CH_TRNIF_bm | DMA_CH_TRNINTLVL_MED_gc;
 			count = tin_buf_size;
 		}
 		else
 		{
-			uint8_t trfcnt = DMA_CH1_TRFCNT;
+			uint8_t trfcnt = DMA_CH3_TRFCNT;
 			if (trfcnt != tin_buf_size)
 			{
 				count = tin_buf_size - trfcnt;
@@ -315,11 +315,11 @@ void usb_ep3_in_trnif()
 		wrptr = (wrptr + 1) & (tin_buf_count-1);
 
 		uint16_t buf_addr = (uint16_t)tin_bufs[wrptr];
-		DMA_CH1_DESTADDR0 = (uint8_t)buf_addr;
-		DMA_CH1_DESTADDR1 = (uint8_t)(buf_addr >> 8);
-		DMA_CH1_DESTADDR2 = 0;
-		DMA_CH1_TRFCNT = tin_buf_size;
-		DMA_CH1_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+		DMA_CH3_DESTADDR0 = (uint8_t)buf_addr;
+		DMA_CH3_DESTADDR1 = (uint8_t)(buf_addr >> 8);
+		DMA_CH3_DESTADDR2 = 0;
+		DMA_CH3_TRFCNT = tin_buf_size;
+		DMA_CH3_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
 
 		tin_wrptr = wrptr;
 	}
@@ -346,11 +346,11 @@ void usb_ep3_in_trnif()
 		// The DMA transfer was inactive, but we have an idle buffer,
 		// restart DMA into it.
 		uint16_t buf_addr = (uint16_t)tin_bufs[wrptr];
-		DMA_CH1_DESTADDR0 = (uint8_t)buf_addr;
-		DMA_CH1_DESTADDR1 = (uint8_t)(buf_addr >> 8);
-		DMA_CH1_DESTADDR2 = 0;
-		DMA_CH1_TRFCNT = tin_buf_size;
-		DMA_CH1_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
+		DMA_CH3_DESTADDR0 = (uint8_t)buf_addr;
+		DMA_CH3_DESTADDR1 = (uint8_t)(buf_addr >> 8);
+		DMA_CH3_DESTADDR2 = 0;
+		DMA_CH3_TRFCNT = tin_buf_size;
+		DMA_CH3_CTRLA = DMA_CH_ENABLE_bm | DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
 	}
 
 	tin_rdptr = rdptr;
