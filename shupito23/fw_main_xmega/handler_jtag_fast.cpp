@@ -335,6 +335,10 @@ handler_base::error_t handler_jtag_fast::select()
 	m_timer_running = false;
 
 	hiv_disallow();
+	pin_rst::make_input();
+	while (!pin_rst::ready())
+		g_process();
+
 	g_app.disallow_tunnel();
 	pin_tms::make_high();
 	pin_tck::make_inverted();
@@ -359,8 +363,6 @@ handler_base::error_t handler_jtag_fast::select()
 
 void handler_jtag_fast::unselect()
 {
-	pin_rst::make_input();
-
 	AWEXC_CTRL = 0;
 	AWEXC_OUTOVEN = 0;
 
@@ -375,6 +377,7 @@ void handler_jtag_fast::unselect()
 	pin_tck::make_noninverted();
 	g_app.allow_tunnel();
 
+	pin_rst::make_input();
 	while (!pin_rst::ready())
 		g_process();
 	hiv_allow();
