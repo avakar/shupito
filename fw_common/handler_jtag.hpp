@@ -28,7 +28,7 @@ struct handler_jtagg
 				uint8_t length = cp[0];
 				if (size == (length + 15) / 8)
 				{
-					led l;
+					led l(true);
 
 					tick();
 					for (uint8_t i = 1; length != 0; ++i)
@@ -55,7 +55,7 @@ struct handler_jtagg
 		case 2: // SHIFT 8'length length'data
 			if (size > 1 && (cp[0] + 15) / 8 == size)
 			{
-				led l;
+				led l(true);
 
 				uint8_t length = cp[0];
 
@@ -119,7 +119,7 @@ struct handler_jtagg
 		case 4: // CLOCK 32'ticks
 			if (size >= 4)
 			{
-				led l;
+				led l(true);
 
 				uint32_t clocks = cp[0]
 					| (uint32_t(cp[1]) << 8)

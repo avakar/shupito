@@ -172,6 +172,17 @@ spi_t spi;
 
 struct led_holder
 {
+	led_holder(bool on = false)
+	{
+		if (on)
+			this->on();
+	}
+
+	~led_holder()
+	{
+		this->off();
+	}
+
 	static void on()
 	{
 		pin_led::set_value(true);
@@ -192,6 +203,10 @@ ISR(USARTC0_RXC_vect) { pdi.intr_rxc(); }
 
 struct process_t
 {
+	typedef led_holder led;
+
+	void allow_tunnel();
+	void disallow_tunnel();
 	void operator()() const;
 } g_process;
 
@@ -972,6 +987,16 @@ void spi_t::disable_tx()
 bool spi_t::read_raw()
 {
 	return pin_buf_rxd::read();
+}
+
+void process_t::allow_tunnel()
+{
+	ctx.allow_com_app();
+}
+
+void process_t::disallow_tunnel()
+{
+	ctx.disallow_com_app();
 }
 
 int main()
