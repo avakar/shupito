@@ -25,11 +25,10 @@ struct handler_jtagg
 		case 1: // STATE 8'length length'state_path
 			if (size >= 1)
 			{
+				led l(true);
 				uint8_t length = cp[0];
-				if (size == (length + 15) / 8)
+				if (size >= (length + 15) / 8)
 				{
-					led l(true);
-
 					tick();
 					for (uint8_t i = 1; length != 0; ++i)
 					{
@@ -53,10 +52,9 @@ struct handler_jtagg
 			}
 			return true;
 		case 2: // SHIFT 8'length length'data
-			if (size > 1 && (cp[0] + 15) / 8 == size)
+			if (size > 1 && cp[0] <= 8*14)
 			{
 				led l(true);
-
 				uint8_t length = cp[0];
 
 				uint8_t * wbuf = com.alloc(2, size);
@@ -120,12 +118,11 @@ struct handler_jtagg
 			if (size >= 4)
 			{
 				led l(true);
-
 				uint32_t clocks = cp[0]
 					| (uint32_t(cp[1]) << 8)
 					| (uint32_t(cp[2]) << 16)
 					| (uint32_t(cp[3]) << 24);
-				do
+				while (clocks != 0)
 				{
 					uint16_t chunk = clocks > 2000? 2000: clocks;
 					clocks -= chunk;
@@ -136,9 +133,9 @@ struct handler_jtagg
 						tock();
 					}
 
-					com.send_sync(4, (uint8_t const *)&clocks, 4);
+					uint8_t last = clocks == 0;
+					com.send_sync(4, &last, 1);
 				}
-				while (clocks != 0);
 			}
 			return true;
 		}
