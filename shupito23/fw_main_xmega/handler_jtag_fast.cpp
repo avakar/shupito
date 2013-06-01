@@ -147,7 +147,7 @@ static bool do_shift(uint8_t cmd, uint8_t const * cp, uint8_t size, yb_writer & 
 			DMA_CH0_DESTADDR1 = destaddr >> 8;
 			DMA_CH0_DESTADDR2 = 0;
 
-			DMA_CH0_TRFCNT = buf_len;
+			DMA_CH0_TRFCNT = buf_len + 1;
 			DMA_CH0_CTRLA = DMA_CH_SINGLE_bm | DMA_CH_BURSTLEN_1BYTE_gc;
 
 			cli();
