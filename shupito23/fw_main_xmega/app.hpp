@@ -97,6 +97,9 @@ public:
 	void allow_tunnel();
 	void disallow_tunnel();
 
+	void disable_pwm();
+	bool send_pwm_settings();
+
 private:
 	char m_usb_sn[2*sn_calib_indexes_count];
 
@@ -123,6 +126,11 @@ private:
 	uint8_t m_tunnel_mode;
 
 	bool m_assumed_btn_state;
+
+	bool m_send_pwm_scheduled;
+	uint8_t m_pwm_kind;
+	uint32_t m_pwm_period;
+	uint32_t m_pwm_duty_cycle;
 };
 
 extern app g_app;

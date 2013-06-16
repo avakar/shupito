@@ -6,6 +6,7 @@
 #include "led.hpp"
 #include "tunnel.hpp"
 #include "settings.hpp"
+#include "../../fw_common/avrlib/serialize.hpp"
 
 app g_app;
 
@@ -74,6 +75,7 @@ void usb_yb_writer::send_sync(uint8_t cmd, uint8_t const * data, uint8_t size)
 
 app::app()
 	: m_handler_avricsp(spi, clock, g_process), m_handler_pdi(pdi, clock, g_process), m_handler_spi(spi)
+	, m_send_pwm_scheduled(false), m_pwm_kind(0), m_pwm_period(0), m_pwm_duty_cycle(0)
 {
 }
 
@@ -248,6 +250,12 @@ void app::run()
 			m_send_vccio_state_scheduled = false;
 	}
 
+	if (m_send_pwm_scheduled)
+	{
+		if (this->send_pwm_settings())
+			m_send_pwm_scheduled = false;
+	}
+
 	if (m_vccio_drive_state == vccio_disabled && m_vccio_voltage < 111) // 300mV
 	{
 		m_vccio_drive_state = vccio_enabled;
@@ -361,6 +369,9 @@ uint8_t app::select_handler(handler_base * new_handler)
 {
 	uint8_t err = 0;
 
+	if (new_handler != 0 && new_handler != &m_handler_avricsp)
+		this->disable_pwm();
+
 	if (new_handler != m_handler)
 	{
 		if (m_handler)
@@ -465,4 +476,29 @@ void process_with_debug_t::operator()() const
 {
 	g_process();
 	g_app.process_with_debug();
+}
+
+void app::disable_pwm()
+{
+	pin_aux_rst::make_input();
+	TCC0_CTRLA = 0;
+	TCC0_CTRLB = 0;
+	m_pwm_kind = 0;
+	m_send_pwm_scheduled = true;
+}
+
+bool app::send_pwm_settings()
+{
+	uint8_t * w = m_usb_writer.alloc(0x11, m_pwm_kind? 9: 1);
+	if (!w)
+		return false;
+
+	w[0] = m_pwm_kind;
+	if (m_pwm_kind)
+	{
+		avrlib::serialize(w + 1, m_pwm_period);
+		avrlib::serialize(w + 5, m_pwm_duty_cycle);
+	}
+	m_usb_writer.commit();
+	return true;
 }

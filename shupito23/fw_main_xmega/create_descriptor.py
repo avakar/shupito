@@ -53,6 +53,12 @@ yb_desc = make_yb_desc(UUID('093d7f33-cdc6-4928-955d-513d17a85358'),
         Config(UUID('9034d141-c47e-406b-a6fd-3f5887729f8f'), 13, 1, flags=0x03), # led
         Config(UUID('64d5bf39-468a-4fbb-80bb-334d8ca3ad81'), 14, 1, flags=0x03,  # rename
             data=struct.pack('<BH', 1, 30)
+            ),
+        Config(UUID('0a77e245-db84-4871-8d0a-daefa901df21'), 16, 2, flags=0x03,  # PWM
+            data=struct.pack('<BI',
+                1, # version
+                16000000 # base frequency
+                )
             )
         )
     )
