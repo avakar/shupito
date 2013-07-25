@@ -10,20 +10,23 @@ void spi_t::clear()
 
 	pin_txd::make_input();
 	pin_xck::make_input();
+	pin_xck::make_noninverted();
 	g_app.allow_tunnel();
 }
 
-spi_t::error_t spi_t::start_master(uint16_t bsel, bool sample_on_trailing)
+spi_t::error_t spi_t::start_master(uint16_t bsel, uint8_t mode, bool lsb_first)
 {
 	g_app.disallow_tunnel();
 	pin_txd::make_low();
+	if (mode & 2)
+		pin_xck::make_inverted();
 	pin_xck::make_low();
 
 	if (bsel)
 		--bsel;
 	USARTC1.BAUDCTRLA = bsel;
 	USARTC1.BAUDCTRLB = bsel >> 8;
-	USARTC1.CTRLC = USART_CMODE_MSPI_gc | (sample_on_trailing? (1<<1): 0);
+	USARTC1.CTRLC = USART_CMODE_MSPI_gc | ((mode & 1)? (1<<1): 0) | (lsb_first? (1<<2): 0);
 	USARTC1.CTRLB = USART_RXEN_bm | USART_TXEN_bm;
 	return 0;
 }

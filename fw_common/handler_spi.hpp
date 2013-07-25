@@ -25,14 +25,19 @@ public:
 	{
 		switch (cmd)
 		{
-		case 1: // PROGEN 2'bsel
+		case 1: // PROGEN 2'bsel [1'flags (2'mode, 1'lsb_first)]
 			{
 				uint8_t err = 0;
-				if (size != 2)
+				if (size != 2 && (size != 3 || (cp[2] & 0xf8)))
 					err = 1;
-				
+
 				if (!err)
-					err = spi.start_master(cp[0] | (cp[1] << 8), false);
+				{
+					uint8_t flags = size == 3? cp[2]: 0;
+					uint8_t mode = flags & 3;
+					bool lsb_first = (flags & 4) != 0;
+					err = spi.start_master(cp[0] | (cp[1] << 8), mode, lsb_first);
+				}
 
 				if (!err)
 					ResetPin::make_high();

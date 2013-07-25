@@ -45,7 +45,7 @@ public:
 				ResetPin::make_high();
 				avrlib::wait(clock, Clock::template us<1>::value);
 
-				err = spi.start_master(cp[0] | (cp[1] << 8), true);
+				err = spi.start_master(cp[0] | (cp[1] << 8), /*mode=*/1, /*lsb_first=*/false);
 				com.send_sync(1, &err, 1);
 			}
 			break;

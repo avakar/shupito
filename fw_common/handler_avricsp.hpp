@@ -31,7 +31,7 @@ public:
 			m_programming_enabled = false;
 
 			{
-				typename spi_t::error_t err = spi.start_master(cp[0] | (cp[1] << 8), false);
+				typename spi_t::error_t err = spi.start_master(cp[0] | (cp[1] << 8), /*mode=*/0, /*lsb_first=*/false);
 				if (err)
 				{
 					w.send_sync(1, &err, 1);
