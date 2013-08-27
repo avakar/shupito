@@ -1,11 +1,13 @@
-import struct, sys, os, os.path
+import struct, sys, os, os.path, json
 from uuid import UUID
 sys.path.insert(0, os.path.join(os.path.split(__file__)[0], '../../fw_common/avrlib'))
 
 from yb_desc import *
 hi = get_hg_info()
 
-yb_desc = make_yb_desc(UUID('093d7f33-cdc6-4928-955d-513d17a85358'),
+device_guid = '093d7f33-cdc6-4928-955d-513d17a85358'
+
+yb_desc = make_yb_desc(UUID(device_guid),
     And(
         Or(
             Config(UUID('46dbc865-b4d0-466b-9b70-2f3f5b264e65'), 1, 8,  # ICSP
@@ -186,3 +188,11 @@ if __name__ == '__main__':
         fout = open(sys.argv[1], 'w')
     print_descriptors(fout, usb_desc, rev_hash=hi.rev_hash)
     fout.close()
+
+    if len(sys.argv) > 2:
+        with open(sys.argv[2], 'w') as fout:
+            json.dump({
+                'device_guid': device_guid,
+                'fw_timestamp': hi.timestamp,
+                'dfu_padding': 64
+                }, fout)

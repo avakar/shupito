@@ -24,7 +24,7 @@
     <avrtool />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-    <PreBuildEvent>$(MSBuildProjectDirectory)\create_descriptor.py $(MSBuildProjectDirectory)\usb_descriptors.h
+    <PreBuildEvent>$(MSBuildProjectDirectory)\create_descriptor.py $(MSBuildProjectDirectory)\usb_descriptors.h $(OutputDirectory)\build_info.json
 $(MSBuildProjectDirectory)\generate_baudctrls.py &gt; $(MSBuildProjectDirectory)\baudctrls.h
 </PreBuildEvent>
     <ToolchainSettings>
@@ -56,6 +56,7 @@ $(MSBuildProjectDirectory)\generate_baudctrls.py &gt; $(MSBuildProjectDirectory)
         <avrgcccpp.linker.optimization.RelaxBranches>True</avrgcccpp.linker.optimization.RelaxBranches>
       </AvrGccCpp>
     </ToolchainSettings>
+    <PostBuildEvent>$(MSBuildProjectDirectory)\make_dfu.py $(OutputDirectory)\$(OutputFileName).hex $(OutputDirectory)\$(OutputFileName).dfu $(OutputDirectory)\build_info.json</PostBuildEvent>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="app.cpp">
