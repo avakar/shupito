@@ -44,18 +44,10 @@ public:
 					error = 5;
 
 				if (!error)
-					pdi_key(pdi, 0x1289AB45CDD888FFull);
-
-				uint8_t pdi_status = 0;
-				typename clock_t::time_type t = clock.value();
-				while (!error && (pdi_status & 0x02) == 0 && clock.value() - t < Clock::template us<20000>::value)
 				{
-					pdi_ldcs(pdi, 0, &pdi_status);
-					error = pdi_wait_read(pdi, clock, process);
+					pdi_key(pdi, 0x1289AB45CDD888FFull);
+					error = this->wait_for_nvm();
 				}
-
-				if (!error && (pdi_status & 0x02) == 0)
-					error = 3;
 
 				if (error != 0)
 					pdi.clear();
@@ -266,6 +258,7 @@ public:
 					// Cycle reset to reload the new fuse values
 					pdi_stcs(pdi, 1, 0x00);
 					pdi_stcs(pdi, 1, 0x59);
+					error = this->wait_for_nvm();
 				}
 				else
 				{
@@ -284,6 +277,26 @@ public:
 	}
 
 private:
+	uint8_t wait_for_nvm()
+	{
+		uint8_t error = 0;
+		uint8_t pdi_status = 0;
+		typename clock_t::time_type t = clock.value();
+
+		// Note that XMEGAs can be configured to stay in reset for up to 64ms.
+		// Therefore, we may have to wait for at least that long.
+		while (!error && (pdi_status & 0x02) == 0 && clock.value() - t < Clock::template us<128000>::value)
+		{
+			pdi_ldcs(pdi, 0, &pdi_status);
+			error = pdi_wait_read(pdi, clock, process);
+		}
+
+		if (!error && (pdi_status & 0x02) == 0)
+			error = 3;
+
+		return error;
+	}
+
 	pdi_t & pdi;
 	clock_t & clock;
 
