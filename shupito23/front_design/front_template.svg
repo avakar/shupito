@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="297mm"
+   height="210mm"
+   viewBox="0 0 297 210"
+   font-family="Arial"
+   viewport=""
+   id="svg2"
+   version="1.1"
+   inkscape:version="0.48.4 r9939"
+   sodipodi:docname="attempt.svg">
+  <metadata
+     id="metadata58">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <defs
+     id="defs56" />
+  <sodipodi:namedview
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1"
+     objecttolerance="10"
+     gridtolerance="10"
+     guidetolerance="10"
+     inkscape:pageopacity="0"
+     inkscape:pageshadow="2"
+     inkscape:window-width="1920"
+     inkscape:window-height="1148"
+     id="namedview54"
+     showgrid="false"
+     inkscape:zoom="8"
+     inkscape:cx="75.525181"
+     inkscape:cy="303.78304"
+     inkscape:window-x="1358"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="g4"
+     showguides="true"
+     inkscape:guide-bbox="true" />
+  <g
+     transform="translate(0 24)"
+     font-family="helvetica"
+     font-size="2.1"
+     id="g4">
+    <path
+       style="fill:none;stroke:#000000;stroke-width:0.25400001"
+       d="m 0,-0.3175 35.277778,0 0,-23.495 -35.277778,0 0,0 z"
+       id="polygon6"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="cccccc" />
+    <text
+       x="1.5875"
+       y="-21.425"
+       id="text8"
+       style="-inkscape-font-specification:Arial;font-family:Arial;font-weight:normal;font-style:normal;font-stretch:normal;font-variant:normal">VUSB</text>
+    <!--<line stroke="black" stroke-width="0.1" x1="0" y1="-22.225" x2="100" y2="-22.225" />-->
+    <text
+       x="1.5875"
+       y="-18.885"
+       id="text10">RST</text>
+    <text
+       x="8.6959724"
+       y="-18.885"
+       id="text12">VPP (12V)</text>
+    <text
+       x="1.5875"
+       y="-16.345"
+       id="text14">VCCIO</text>
+    <text
+       x="1.5875"
+       y="-13.805"
+       id="text16">GND</text>
+    <text
+       x="1.5875"
+       y="-11.265"
+       id="text18">GND</text>
+    <line
+       x1="7.8822222"
+       x2="7.8822222"
+       y1="-10.5"
+       y2="-0.80000001"
+       id="line20"
+       style="stroke:#000000;stroke-width:0.17187333;stroke-miterlimit:4;stroke-dasharray:none" />
+    <path
+       style="stroke:#000000;stroke-width:0.17187333;stroke-miterlimit:4"
+       d="m 7.8822222,-20.554167 0,1.833056"
+       id="line4309"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="cc" />
+    <line
+       x1="13.947222"
+       x2="13.947222"
+       y1="-10.5"
+       y2="-0.80000001"
+       id="line3421"
+       style="stroke:#000000;stroke-width:0.17187333;stroke-miterlimit:4;stroke-dasharray:none" />
+    <text
+       x="1.5875"
+       y="-8.725"
+       id="text22">CLK</text>
+    <text
+       x="8.5372219"
+       y="-8.7250004"
+       id="text24">RST</text>
+    <text
+       x="14.569721"
+       y="-8.7250004"
+       id="text26">TMS</text>
+    <text
+       x="1.5875"
+       y="-6.185"
+       id="text28">SCK</text>
+    <text
+       x="8.5372219"
+       y="-6.1849999"
+       id="text30">PDI</text>
+    <text
+       x="14.569721"
+       y="-6.1849999"
+       id="text32">TCK</text>
+    <text
+       x="1.5875"
+       y="-3.645"
+       id="text34">MISO</text>
+    <text
+       x="8.5372219"
+       y="-3.645"
+       id="text36">RX</text>
+    <text
+       x="14.569721"
+       y="-3.645"
+       id="text38">TDO</text>
+    <text
+       x="1.5875"
+       y="-1.105"
+       id="text40">MOSI</text>
+    <text
+       x="8.5372219"
+       y="-1.105"
+       id="text42">TX</text>
+    <text
+       x="14.569721"
+       y="-1.105"
+       id="text44">TDI</text>
+    <text
+       x="28.44673"
+       y="-3.645"
+       id="text46"
+       style="text-anchor:end">TX ⇅</text>
+    <text
+       x="29.155535"
+       y="-1.105"
+       id="text48">3.3V</text>
+    <text
+       x="28.90534"
+       y="-3.645"
+       id="text50">GND</text>
+    <text
+       x="28.44673"
+       y="-1.105"
+       id="text52"
+       style="text-anchor:end">RX ⇅</text>
+    <path
+       sodipodi:type="star"
+       style="fill:#000000;fill-opacity:1;stroke:none"
+       id="path3132"
+       sodipodi:sides="3"
+       sodipodi:cx="106.29781"
+       sodipodi:cy="18.450861"
+       sodipodi:r1="3.9230447"
+       sodipodi:r2="3.3866138"
+       sodipodi:arg1="0"
+       sodipodi:arg2="1.0471976"
+       inkscape:flatsided="true"
+       inkscape:rounded="0"
+       inkscape:randomized="0"
+       d="m 110.22086,18.450861 -5.88457,3.397456 0,-6.794912 z"
+       transform="matrix(0.28222221,0,0,0.28222221,2.0568087,-25.356994)"
+       inkscape:transform-center-x="-1.6933054" />
+    <text
+       xml:space="preserve"
+       style="font-size:2.0999999px;font-style:normal;font-weight:normal;text-align:center;line-height:125%;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#000000;fill-opacity:1;stroke:none;font-family:helvetica;-inkscape-font-specification:helvetica"
+       x="29.291838"
+       y="-12.626401"
+       id="text3366"
+       sodipodi:linespacing="125%"><tspan
+         sodipodi:role="line"
+         id="tspan3368"
+         x="29.291838"
+         y="-12.626401">Sokolská</tspan><tspan
+         sodipodi:role="line"
+         x="29.291838"
+         y="-10.001401"
+         id="tspan3370">2014-01</tspan></text>
+  </g>
+</svg>
