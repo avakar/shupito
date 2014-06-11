@@ -58,7 +58,7 @@
      id="g4">
     <path
        style="fill:none;stroke:#000000;stroke-width:0.25400001"
-       d="m 0,-0.3175 35.277778,0 0,-23.495 -35.277778,0 0,0 z"
+       d="m 0,-0.3175 42,0 0,-7.3 -5.2,0 0,-8.895 5.2,0 0,-7.3 -42,0 z"
        id="polygon6"
        inkscape:connector-curvature="0"
        sodipodi:nodetypes="cccccc" />
@@ -157,20 +157,20 @@
        y="-1.105"
        id="text44">TDI</text>
     <text
-       x="28.44673"
+       x="35.44673"
        y="-3.645"
        id="text46"
        style="text-anchor:end">TX ⇅</text>
     <text
-       x="29.155535"
+       x="36.155535"
        y="-1.105"
        id="text48">3.3V</text>
     <text
-       x="28.90534"
+       x="35.90534"
        y="-3.645"
        id="text50">GND</text>
     <text
-       x="28.44673"
+       x="35.44673"
        y="-1.105"
        id="text52"
        style="text-anchor:end">RX ⇅</text>
@@ -189,7 +189,7 @@
        inkscape:rounded="0"
        inkscape:randomized="0"
        d="m 110.22086,18.450861 -5.88457,3.397456 0,-6.794912 z"
-       transform="matrix(0.28222221,0,0,0.28222221,2.0568087,-25.356994)"
+       transform="translate(7,0) matrix(0.28222221,0,0,0.28222221,2.0568087,-25.356994)"
        inkscape:transform-center-x="-1.6933054" />
     <text
        xml:space="preserve"

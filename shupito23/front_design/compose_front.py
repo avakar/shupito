@@ -5,11 +5,11 @@ lines = templ.split('\n')
 outlines = list(lines[:53])
 
 rows = 7
-cols = 7
+cols = 6
 xoff = 17
 yoff = 30
 height = 29
-width = 37
+width = 45
 reps = 4
 i = 0
 for x in xrange(cols):
