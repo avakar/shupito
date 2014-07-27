@@ -3,6 +3,7 @@
 
 #include "clock.hpp"
 #include "spi.hpp"
+#include "usart.hpp"
 #include "hiv.hpp"
 #include "voltage.hpp"
 #include "led.hpp"
@@ -17,6 +18,7 @@
 #include "../../fw_common/handler_xmega.hpp"
 #include "../../fw_common/handler_avricsp.hpp"
 #include "../../fw_common/handler_spi.hpp"
+#include "../../fw_common/handler_uart.hpp"
 #include "handler_jtag_fast.hpp"
 
 typedef pdi_t<clock_t, pin_aux_rst, pin_pdi, led_holder> my_pdi_t;
@@ -67,6 +69,7 @@ class usb_yb_writer
 {
 public:
 	usb_yb_writer();
+	uint8_t avail() const;
 	uint8_t * alloc(uint8_t cmd, uint8_t size);
 	uint8_t * alloc_sync(uint8_t cmd, uint8_t size);
 	void commit();
@@ -92,6 +95,7 @@ public:
 	void process_with_debug();
 
 	void open_tunnel(uint8_t which, uint32_t baudrate, uint8_t mode);
+	static void get_baudctrl(uint32_t baudrate, uint16_t & baudctrl, bool & dblspeed);
 	void close_tunnel();
 
 	void allow_tunnel();
@@ -116,6 +120,7 @@ private:
 	handler_avricsp<spi_t, clock_t, pin_rst, process_t> m_handler_avricsp;
 	handler_xmega<my_pdi_t, clock_t, process_t> m_handler_pdi;
 	handler_spi<spi_t, pin_aux_rst> m_handler_spi;
+	handler_uart<usart_t> m_handler_uart;
 	handler_jtag_fast m_handler_jtag;
 	handler_base * m_handler;
 

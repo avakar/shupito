@@ -158,7 +158,7 @@ struct handler_jtagg
 		m_process.allow_tunnel();
 	}
 
-	void process_selected()
+	void process_selected(com_t &)
 	{
 		tick();
 		tock();

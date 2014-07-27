@@ -12,6 +12,7 @@ public:
 	{
 	}
 
+	virtual uint8_t avail() const { return 0; };
 	virtual uint8_t * alloc(uint8_t cmd, uint8_t size) { return 0; }
 	virtual uint8_t * alloc_sync(uint8_t cmd, uint8_t size) { return 0; }
 	virtual void commit() {}
@@ -35,7 +36,10 @@ struct handler_base
 	virtual error_t select() { return 0; }
 	virtual void unselect() {}
 	virtual bool handle_command(uint8_t cmd, uint8_t const * cp, uint8_t size, com_t & com) { AVRLIB_ASSERT(0); return false; }
-	virtual void process_selected() {}
+	virtual void process_selected(com_t & com)
+	{
+		(void)com;
+	}
 };
 
 #endif

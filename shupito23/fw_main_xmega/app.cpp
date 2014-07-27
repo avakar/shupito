@@ -20,6 +20,7 @@ ISR(USARTC0_TXC_vect) { pdi.intr_txc(); }
 ISR(USARTC0_RXC_vect) { pdi.intr_rxc(); }
 
 static spi_t spi;
+static usart_t usart;
 
 com_dbg_t com_dbg;
 ISR(USARTE0_RXC_vect) { com_dbg.intr_rx(); }
@@ -27,6 +28,11 @@ ISR(USARTE0_RXC_vect) { com_dbg.intr_rx(); }
 usb_yb_writer::usb_yb_writer()
 	: yb_writer(255)
 {
+}
+
+uint8_t usb_yb_writer::avail() const
+{
+	return usb_yb_in_packet_ready()? 255: 0;
 }
 
 uint8_t * usb_yb_writer::alloc(uint8_t cmd, uint8_t size)
@@ -74,7 +80,7 @@ void usb_yb_writer::send_sync(uint8_t cmd, uint8_t const * data, uint8_t size)
 }
 
 app::app()
-	: m_handler_avricsp(spi, clock, g_process), m_handler_pdi(pdi, clock, g_process), m_handler_spi(spi)
+	: m_handler_avricsp(spi, clock, g_process), m_handler_pdi(pdi, clock, g_process), m_handler_spi(spi), m_handler_uart(usart)
 	, m_send_pwm_scheduled(false), m_pwm_kind(0), m_pwm_period(0), m_pwm_duty_cycle(0)
 {
 }
@@ -287,7 +293,7 @@ void app::run()
 	g_process_with_debug();
 
 	if (m_handler)
-		m_handler->process_selected();
+		m_handler->process_selected(m_usb_writer);
 
 	while (!com_usb_tunnel2.empty() && com_dbg.tx_ready())
 		com_dbg.write(com_usb_tunnel2.read());
@@ -385,10 +391,8 @@ uint8_t app::select_handler(handler_base * new_handler)
 }
 
 #include "baudctrls.h"
-void app::open_tunnel(uint8_t which, uint32_t baudrate, uint8_t mode)
+void app::get_baudctrl(uint32_t baudrate, uint16_t & baudctrl, bool & dblspeed)
 {
-	led_blink_short();
-
 	uint32_t last_val = 0;
 	uint16_t selected_index = usart_baudctrl_count-1;
 	for (uint16_t i = 0; i < sizeof usart_baudctrls; i += 5)
@@ -410,9 +414,17 @@ void app::open_tunnel(uint8_t which, uint32_t baudrate, uint8_t mode)
 		last_val = val;
 	}
 
-	bool dblspeed = (pgm_read_byte(&usart_baudctrls[selected_index+2]) & 0x80) != 0;
+	dblspeed = (pgm_read_byte(&usart_baudctrls[selected_index+2]) & 0x80) != 0;
+	baudctrl = pgm_read_word(&usart_baudctrls[selected_index+3]);
+}
 
-	uint16_t b = pgm_read_word(&usart_baudctrls[selected_index+3]);
+void app::open_tunnel(uint8_t which, uint32_t baudrate, uint8_t mode)
+{
+	led_blink_short();
+
+	bool dblspeed;
+	uint16_t b;
+	this->get_baudctrl(baudrate, b, dblspeed);
 
 	if (which == 0)
 	{

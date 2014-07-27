@@ -403,7 +403,7 @@ public:
 		}
 
 		if (handler)
-			handler->process_selected();
+			handler->process_selected(m_primary_com);
 	}
 
 	void allow_com_app()

@@ -38,7 +38,15 @@ yb_desc = make_yb_desc(UUID(device_guid),
                 data=struct.pack('<BII',
                     1,
                     32000000,
-                    1000000))
+                    1000000)),
+            Config(UUID('b1a28e62-6d13-44b5-8894-0b9f7a3061c9'), 1, 4,  # UART
+                data=struct.pack('<BIHH',
+                    1, # version
+                    16000000,
+                    1,
+                    (1<<12)
+                    )
+                ),
             ),
         Config(UUID('1d4738a0-fc34-4f71-aa73-57881b278cb1'), 10, 1, flags=0x03,  # measurement
             data=struct.pack('<BI',

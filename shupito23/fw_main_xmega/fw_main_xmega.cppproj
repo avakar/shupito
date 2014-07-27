@@ -143,6 +143,12 @@ $(MSBuildProjectDirectory)\generate_baudctrls.py &gt; $(MSBuildProjectDirectory)
     <Compile Include="tunnel.hpp">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="usart.cpp">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="usart.hpp">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="usb.cpp">
       <SubType>compile</SubType>
     </Compile>
