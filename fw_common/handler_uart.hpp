@@ -4,15 +4,16 @@
 #include "handler_base.hpp"
 #include "avrlib/serialize.hpp"
 
-template <typename Usart>
+template <typename Usart, typename Bitbang>
 class handler_uart
 	: public handler_base
 {
 public:
 	typedef Usart usart_t;
+	typedef Bitbang bitbang_t;
 
-	handler_uart(usart_t & usart)
-		: usart(usart), m_enabled(false), m_send_pos(0)
+	handler_uart(usart_t & usart, bitbang_t & bitbang)
+		: usart(usart), bitbang(bitbang), m_enabled(false), m_send_pos(0)
 	{
 	}
 
@@ -51,19 +52,21 @@ public:
 			{
 				AVRLIB_ASSERT(m_send_pos <= size);
 
-				while (m_send_pos < size)
-				{
-					if (usart.tx_full())
-						return false;
-					usart.send(cp[m_send_pos++]);
-				}
+				m_send_pos += usart.send(cp + m_send_pos, size - m_send_pos);
+				if (m_send_pos != size)
+					return false;
 
 				m_send_pos = 0;
 
-				{
-					uint8_t err = 0;
-					com.send_sync(3, &err, 1);
-				}
+				uint8_t err = 0;
+				com.send_sync(3, &err, 1);
+			}
+			break;
+
+		case 5: // BITBANG 8'out 8'data
+			{
+				uint8_t err = (bitbang.set(cp, size)? 0: 1);
+				com.send_sync(1, &err, 1);
 			}
 			break;
 
@@ -76,26 +79,19 @@ public:
 
 	void process_selected(com_t & com)
 	{
-		uint8_t rx_size = usart.rx_size();
-		uint8_t com_avail = com.avail();
-		if (rx_size > com_avail)
-			rx_size = com_avail;
+		uint8_t const * recv_data;
+		uint8_t recv_size = usart.recv(recv_data);
+		if (!recv_size || com.avail() < recv_size)
+			return;
 
-		if (rx_size)
-		{
-			led_blink_short();
-
-			uint8_t * p = com.alloc(4, rx_size);
-			AVRLIB_ASSERT(p);
-
-			for (; rx_size; --rx_size)
-				*p++ = usart.recv();
-			com.commit();
-		}
+		led_blink_short();
+		com.send(4, recv_data, recv_size);
+		usart.recv_commit();
 	}
 
 private:
 	usart_t & usart;
+	bitbang_t & bitbang;
 	bool m_enabled;
 	uint8_t m_send_pos;
 };

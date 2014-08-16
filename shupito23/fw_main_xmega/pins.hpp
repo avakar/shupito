@@ -45,4 +45,17 @@ typedef pin_buffer_with_oe<pin_pdiv, pin_pdid> pin_pdi;
 typedef pin_buffer_with_oe<pin_xckv, pin_pdid> pin_xck;
 typedef pin_buffer_with_oe<pin_txdv, pin_txdd> pin_txd;
 
+struct bitbang_t
+{
+public:
+	bitbang_t();
+
+	bool set(uint8_t const * data, uint8_t size);
+	void set_mask(uint8_t mask);
+
+private:
+	static void set_impl(uint8_t vals, uint8_t oes);
+	uint8_t m_mask;
+};
+
 #endif // SHUPITO_SHUPITO23_PINS_HPP

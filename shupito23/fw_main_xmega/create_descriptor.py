@@ -39,7 +39,7 @@ yb_desc = make_yb_desc(UUID(device_guid),
                     1,
                     32000000,
                     1000000)),
-            Config(UUID('b1a28e62-6d13-44b5-8894-0b9f7a3061c9'), 1, 4,  # UART
+            Config(UUID('b1a28e62-6d13-44b5-8894-0b9f7a3061c9'), 1, 5,  # UART
                 data=struct.pack('<BIHH',
                     1, # version
                     16000000,

@@ -88,3 +88,48 @@ void pin_rst::apply_hiv()
 	rst_next_state = st_hiv;
 	rst_timeout.restart();
 }
+
+bitbang_t::bitbang_t()
+	: m_mask(0)
+{
+}
+
+void bitbang_t::set_mask(uint8_t mask)
+{
+	this->set_impl(m_mask & ~mask, 0);
+	m_mask = mask;
+}
+
+template <typename Pin>
+static void bitbang(bool val, bool oe)
+{
+	if (!oe)
+	{
+		if (val)
+			Pin::make_input();
+	}
+	else
+	{
+		if (val)
+			Pin::make_high();
+		else
+			Pin::make_low();
+	}
+}
+
+bool bitbang_t::set(uint8_t const * data, uint8_t size)
+{
+	if (size > 2 || (size % 2) != 0 || (data[1] & 0xf0) != 0)
+		return false;
+
+	this->set_impl(data[0] & m_mask, data[1] & m_mask);
+	return true;
+}
+
+void bitbang_t::set_impl(uint8_t vals, uint8_t oes)
+{
+	bitbang<pin_aux_rst>(vals & 0x1, oes & 0x1);
+	bitbang<pin_pdi>(vals & 0x2, oes & 0x2);
+	bitbang<pin_xck>(vals & 0x4, oes & 0x4);
+	bitbang<pin_txd>(vals & 0x8, oes & 0x8);
+}

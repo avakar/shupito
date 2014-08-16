@@ -80,7 +80,7 @@ void usb_yb_writer::send_sync(uint8_t cmd, uint8_t const * data, uint8_t size)
 }
 
 app::app()
-	: m_handler_avricsp(spi, clock, g_process), m_handler_pdi(pdi, clock, g_process), m_handler_spi(spi), m_handler_uart(usart)
+	: m_handler_avricsp(spi, clock, g_process), m_handler_pdi(pdi, clock, g_process), m_handler_spi(spi), m_handler_uart(usart, m_bitbang)
 	, m_send_pwm_scheduled(false), m_pwm_kind(0), m_pwm_period(0), m_pwm_duty_cycle(0)
 {
 }
@@ -381,9 +381,17 @@ uint8_t app::select_handler(handler_base * new_handler)
 	if (new_handler != m_handler)
 	{
 		if (m_handler)
+		{
 			m_handler->unselect();
+			m_bitbang.set_mask(0);
+		}
+
 		if (new_handler)
+		{
+			if (new_handler == &m_handler_uart)
+				m_bitbang.set_mask(0x3);
 			err = new_handler->select();
+		}
 		m_handler = (err == 0? new_handler: 0);
 	}
 

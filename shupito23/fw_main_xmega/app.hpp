@@ -117,10 +117,12 @@ private:
 	avrlib::timeout<clock_t> m_vccio_drive_check_timeout;
 	voltage_filter<32> m_vccio_filter;
 
+	bitbang_t m_bitbang;
+
 	handler_avricsp<spi_t, clock_t, pin_rst, process_t> m_handler_avricsp;
 	handler_xmega<my_pdi_t, clock_t, process_t> m_handler_pdi;
 	handler_spi<spi_t, pin_aux_rst> m_handler_spi;
-	handler_uart<usart_t> m_handler_uart;
+	handler_uart<usart_t, bitbang_t> m_handler_uart;
 	handler_jtag_fast m_handler_jtag;
 	handler_base * m_handler;
 
